@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <style>
+        /* Reset some default styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Background and text style */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* Container for the login form */
+        .login-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        /* Heading style */
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        /* Style for each form group */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        /* Label style */
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        /* Input field style */
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* Button style */
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .submit-btn:hover {
+            background-color: #45a049;
+        }
+
+        /* Checkbox and label for show password */
+        .show-password {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .show-password input {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <h2>Login</h2>
+        <!-- Login form -->
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required placeholder="Enter your email">
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required placeholder="Enter your password">
+        </div>
+        <div class="show-password">
+            <input type="checkbox" id="show-password" />
+            <label for="show-password">Show Password</label>
+        </div>
+        <button type="submit" class="submit-btn" id="login-btn">Login</button>
+    </div>
+
+    <script>
+        // Lấy các phần tử DOM
+        const passwordInput = document.getElementById("password");
+        const showPasswordCheckbox = document.getElementById("show-password");
+
+        // Chức năng show/hide password
+        showPasswordCheckbox.addEventListener("change", function () {
+            if (showPasswordCheckbox.checked) {
+                passwordInput.type = "text"; // Hiển thị mật khẩu
+            } else {
+                passwordInput.type = "password"; // Ẩn mật khẩu
+            }
+        });
+
+        // Xử lý đăng nhập
+        document.getElementById("login-btn").addEventListener("click", function (e) {
+            e.preventDefault();
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            // Kiểm tra nếu email và password không trống
+            if (email && password) {
+                console.log("Email:", email);
+                console.log("Password:", password);
+                // Ở đây bạn có thể gửi thông tin đăng nhập tới server để xác thực
+            } else {
+                alert("Please fill in both fields.");
+            }
+        });
+    </script>
+</body>
+
+</html>
