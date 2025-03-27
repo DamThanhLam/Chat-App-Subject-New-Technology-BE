@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat nhóm và chat riêng</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      #chat,
+      #chat-private {
+        width: 300px;
+        height: 300px;
+        border: 1px solid #000;
+        overflow-y: auto;
+        margin-bottom: 10px;
+      }
+      input,
+      button {
+        width: 100%;
+        padding: 5px;
+        margin-top: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Chat nhóm & Chat riêng</h2>
+    <label>Nhập tên:</label>
+    <input type="text" id="username" placeholder="Nhập tên của bạn..." />
+    <button onclick="joinChat()">Tham gia</button>
+
+    <div id="chat-container" style="display: none">
+      <div id="chat"></div>
+      <input type="text" id="message" placeholder="Nhập tin nhắn..." />
+      <button onclick="sendGroupMessage()">Gửi nhóm</button>
+
+      <h3>Gửi tin nhắn riêng</h3>
+      <input
+        type="text"
+        id="privateUser"
+        placeholder="Nhập tên người nhận..."
+      />
+      <input
+        type="text"
+        id="privateMessage"
+        placeholder="Nhập tin nhắn riêng..."
+      />
+      <button onclick="sendPrivateMessage()">Gửi riêng</button>
+      <div id="chat-private"></div>
+    </div>
+
+    <script>
+      const socket = io("https://v87jrx-3000.csb.app/", {
+        auth: {
+          token:
+            "beare ",
+        },
+      }); // Kết nối tới server
+
+      function joinChat() {
+        const username = document.getElementById("username").value;
+        if (username.trim()) {
+          socket.emit("join", username);
+          document.getElementById("chat-container").style.display = "block";
+        }
+      }
+
+      function sendGroupMessage() {
+        const message = document.getElementById("message").value;
+        if (message.trim()) {
+          socket.emit("group-message", message);
+          document.getElementById("message").value = "";
+        }
+      }
+
+      function sendPrivateMessage() {
+        const recipient = document.getElementById("privateUser").value;
+        const message = document.getElementById("privateMessage").value;
+        if (recipient.trim() && message.trim()) {
+          socket.emit("private-message", { receiverName: recipient, message });
+          document.getElementById("privateMessage").value = "";
+        }
+      }
+
+      socket.on("group-message", (data) => {
+        const chatBox = document.getElementById("chat");
+        chatBox.innerHTML += `<p><b>${data.user}:</b> ${data.message}</p>`;
+        chatBox.scrollTop = chatBox.scrollHeight;
+      });
+
+      socket.on("private-message", (data) => {
+        console.log(data);
+        const chatBoxPrivate = document.getElementById("chat-private");
+        chatBoxPrivate.innerHTML += `<p><b>${data.sender}:</b> ${data.message}</p>`;
+        chatBoxPrivate.scrollTop = chatBoxPrivate.scrollHeight;
+      });
+
+      socket.on("user-list", (users) => {
+        console.log("Danh sách người dùng:", users);
+      });
+      socket.on("connect_error", (error) => {
+        alert("❗ Kết nối thất bại:", error.message);
+      });
+    </script>
+  </body>
+</html>
