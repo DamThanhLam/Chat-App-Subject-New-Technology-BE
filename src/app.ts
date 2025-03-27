@@ -5,6 +5,10 @@ import { Server, Socket } from "socket.io";
 import { registerRoutes } from "./routes/registerRoutes";
 import { loginRoutes } from "./routes/loginRoutes";
 import { socketHandler } from "./handler/socketHandler";
+import userRoutes from "./routes/userRoutes";
+import * as dotenv from "dotenv";
+dotenv.config();
+
 
 const app = express();
 app.use(express.json());
@@ -16,6 +20,7 @@ app.get("/", (req, res) => {
 });
 app.use(registerRoutes);
 app.use(loginRoutes);
+app.use("/api/users", userRoutes);
 
 // Socket.IO
 const server = http.createServer(app);
