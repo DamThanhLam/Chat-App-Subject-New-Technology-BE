@@ -8,29 +8,23 @@ import { randomUUID } from "node:crypto";
 import { InviteLink } from "../models/InviteLink";
 
 export class UserService {
-  userRepository = new UserRepository();
-  accountRepository = new AccountRepository();
-<<<<<<< HEAD
+  private userRepository: UserRepository;
+  private accountRepository: AccountRepository;
   private groupRepository: GroupRepository;
   private inviteLinkRepository: InviteLinkRepository;
 
   constructor() {
+    this.userRepository = new UserRepository();
+    this.accountRepository = new AccountRepository();
     this.groupRepository = new GroupRepository();
     this.inviteLinkRepository = new InviteLinkRepository();
-    this.userRepository = new UserRepository();
   }
-  register(user: User, account: Account): User | null {
-    if (this.checkBeforeRegister(user)) {
-      this.accountRepository.createAccount(account);
-      return this.userRepository.createUser(user);
-=======
 
   async register(user: User, account: Account): Promise<User | null> {
     const canRegister = await this.checkBeforeRegister(user);
     if (canRegister) {
       await this.accountRepository.createAccount(account);
       return await this.userRepository.createUser(user);
->>>>>>> origin/endpoint/update-user-info
     }
     return null;
   }
@@ -41,17 +35,26 @@ export class UserService {
 
   async checkBeforeRegister(user: User): Promise<boolean> {
     const users = await this.userRepository.getUsers();
-
     const isDuplicate = users.some(
       (item) => item.email === user.email || item.phoneNumber === user.phoneNumber
     );
-
     return !isDuplicate;
   }
 
-<<<<<<< HEAD
-  createInviteLink(groupId: string, expiresInDays: number = 7): string {
-    const group = this.groupRepository.getGroupById(groupId);
+  async updateUserInfo(id: string, data: Partial<User>): Promise<User> {
+    const user = await this.userRepository.findById(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const updatedUser = await this.userRepository.updateUser(id, data);
+    if (!updatedUser) {
+      throw new Error("Failed to update user");
+    }
+    return updatedUser;
+  }
+
+  async createInviteLink(groupId: string, expiresInDays: number = 7): Promise<string> {
+    const group = await this.groupRepository.getGroupById(groupId);
     if (!group) {
       throw new Error("Group not found");
     }
@@ -68,51 +71,36 @@ export class UserService {
       expiresAt,
     };
 
-    const createdLink = this.inviteLinkRepository.createInviteLink(inviteLink);
-    this.groupRepository.addInviteLinkToGroup(groupId, createdLink.id!);
+    const createdLink = await this.inviteLinkRepository.createInviteLink(inviteLink);
+    await this.groupRepository.addInviteLinkToGroup(groupId, createdLink.id!);
 
     return link;
   }
 
-  // Tham gia nhóm qua link
-  joinGroupWithLink(link: string, userId: string): string {
-    const inviteLink = this.inviteLinkRepository.getInviteLinkByLink(link);
+  async joinGroupWithLink(link: string, userId: string): Promise<string> {
+    const inviteLink = await this.inviteLinkRepository.getInviteLinkByLink(link);
     if (!inviteLink) {
       throw new Error("Invalid invite link");
     }
 
-    // Kiểm tra link hết hạn
     const now = new Date();
     if (now > inviteLink.expiresAt) {
       throw new Error("Invite link has expired");
     }
 
-    const group = this.groupRepository.getGroupById(inviteLink.groupId);
+    const group = await this.groupRepository.getGroupById(inviteLink.groupId);
     if (!group) {
       throw new Error("Group not found");
     }
 
-    const user = this.userRepository.getUserById(userId);
+    const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new Error("User not found");
     }
 
-    // Thêm user vào nhóm
-    this.groupRepository.addMemberToGroup(inviteLink.groupId, userId);
-    this.userRepository.addUserToGroup(userId, inviteLink.groupId);
+    await this.groupRepository.addMemberToGroup(inviteLink.groupId, userId);
+    await this.userRepository.addUserToGroup(userId, inviteLink.groupId);
 
     return `User ${userId} joined group ${inviteLink.groupId} successfully`;
-=======
-  async updateUserInfo(id: string, data: Partial<User>): Promise<User> {
-    const user = await this.userRepository.findById(id);
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const updatedUser = await this.userRepository.updateUser(id, data);
-    if (!updatedUser) {
-      throw new Error("Failed to update user");
-    }
-    return updatedUser;
->>>>>>> origin/endpoint/update-user-info
   }
 }

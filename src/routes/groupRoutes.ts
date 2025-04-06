@@ -40,7 +40,7 @@ router.post("/groups/:groupId/create-link", (req, res) => {
 });
 
 // Endpoint để tham gia nhóm qua link
-router.post("/join/:link", (req, res) => {
+router.post("/groups/join/:link", (req, res) => {
   try {
     const { link } = req.params;
     const { userId } = req.body; // Giả sử userId được gửi trong body
@@ -51,4 +51,4 @@ router.post("/join/:link", (req, res) => {
   }
 });
 
-export default router;
+export { router as groupRoutes };

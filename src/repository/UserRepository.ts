@@ -88,4 +88,15 @@ export class UserRepository {
       updatedAt: new Date(result.Attributes.updatedAt)
     } as User;
   }
+
+  async addUserToGroup(userId: string, groupId: string): Promise<void> {
+    const user = await this.findById(userId);
+    if (user) {
+      console.log(`User ${userId} added to group ${groupId}`);
+      // TODO: thực hiện logic thêm groupId vào danh sách group của user
+    } else {
+      console.error(`User ${userId} not found`);
+    }
+  }
+  
 }

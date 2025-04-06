@@ -9,6 +9,8 @@ import cors from 'cors';
 import { friendRoutes } from "./routes/friendRoutes";
 import dotenv from 'dotenv';
 import groupChatRoutes from './routes/group-chat-routes';
+import { groupRoutes } from "./routes/groupRoutes";
+import { userRoutes } from "./routes/userRoutes";
 
 dotenv.config();
 const app = express();
@@ -24,6 +26,8 @@ app.use(registerRoutes);
 app.use(loginRoutes);
 app.use("/api/friends", friendRoutes);
 app.use('/api/group-chat', groupChatRoutes);
+app.use('/api',groupRoutes)
+app.use('/api/user', userRoutes)
 // Socket.IO
 const server = http.createServer(app);
 const io = new Server(server);

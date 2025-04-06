@@ -24,5 +24,5 @@ router.put("/:id", async (req, res) => {
 });
 
   
+export { router as userRoutes };
 
-export default router;
