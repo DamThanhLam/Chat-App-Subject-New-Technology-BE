@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { DynamoDB } from '../models/dynamodb-utils';
-import { S3Utils } from '../models/s3-utils';
+import { DynamoDB } from '../aws_service/dynamodb-utils';
+import { S3Utils } from '../aws_service/s3-utils';
 
 interface IGroup {
   groupId: string;
@@ -37,7 +37,7 @@ declare module 'express' {
   }
 }
 
-export class GroupChatController {
+export class GroupChatService {
   static async createGroup(req: Request, res: Response) {
     try {
       const { groupName, createdBy, description } = req.body;

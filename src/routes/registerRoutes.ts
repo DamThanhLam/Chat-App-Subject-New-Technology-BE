@@ -2,7 +2,7 @@ import { Router } from "express";
 import path from "path";
 import { decryptedPassword } from "../encryption/crypto/crypto";
 import Account from "../models/Account";
-import { UserService } from "../services/UserService";
+import { UserService } from "../services/user-service";
 import { User } from "../models/user";
 
 const userService = new UserService();

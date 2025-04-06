@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { GroupChatController } from '../controllers/group-chat-controller';
+import { GroupChatService } from '../services/group-chat-service';
 
 const router = Router();
 const upload = multer({
@@ -11,15 +11,15 @@ const upload = multer({
 });
 
 // Nhóm routes
-router.post('/groups', GroupChatController.createGroup);
-router.put('/groups/:groupId', GroupChatController.updateGroup);
-router.get('/groups/:groupId', GroupChatController.getGroupInfo);
+router.post('/groups', GroupChatService.createGroup);
+router.put('/groups/:groupId', GroupChatService.updateGroup);
+router.get('/groups/:groupId', GroupChatService.getGroupInfo);
 
 // Tin nhắn routes
-router.post('/groups/:groupId/messages', upload.single('file'), GroupChatController.sendMessage);
-router.get('/groups/:groupId/messages', GroupChatController.getMessages);
+router.post('/groups/:groupId/messages', upload.single('file'), GroupChatService.sendMessage);
+router.get('/groups/:groupId/messages', GroupChatService.getMessages);
 
 // Thành viên routes
-router.post('/groups/:groupId/members', GroupChatController.addMemberToGroup);
+router.post('/groups/:groupId/members', GroupChatService.addMemberToGroup);
 
 export default router;
