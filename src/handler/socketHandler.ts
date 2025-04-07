@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 
 const users: Record<string, string> = {};
+const userRooms: Record<string, string> = {};
 
 export function socketHandler(io: Server) {
   io.on("connection", (socket: Socket) => {
@@ -32,9 +33,30 @@ export function socketHandler(io: Server) {
       }
     );
 
+    // Tham gia nhóm chat (room)
+    socket.on("join-room", (roomId: string) => {
+      socket.join(roomId);
+      userRooms[socket.id] = roomId;
+      console.log(`${users[socket.id]} joined room ${roomId}`);
+    });
+
+    // Gửi tin nhắn trong nhóm (realtime)
+    socket.on("group-message", ({ roomId, message }: { roomId: string; message: string }) => {
+      const sender = users[socket.id];
+      if (sender && roomId) {
+        io.to(roomId).emit("group-message", {
+          sender,
+          message,
+          roomId,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log(`${users[socket.id]} disconnected.`);
       delete users[socket.id];
+      delete userRooms[socket.id];
       io.emit("user-list", Object.values(users));
     });
   });
