@@ -18,6 +18,6 @@ const upload_file = multer({
         }
         return cb(new Error("Chỉ nhấp nhận file ảnh JPG, PNG, JPEG"));
     }
-}).single("image");
+});
 
 export default upload_file;

@@ -11,6 +11,5 @@ const awsConfig: DynamoDBClientConfig & S3ClientConfig = {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
   }
 };
-
 export const dynamoDBClient = new DynamoDBClient(awsConfig);
 export const s3Client = new S3Client(awsConfig);

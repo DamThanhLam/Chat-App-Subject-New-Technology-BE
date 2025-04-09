@@ -12,18 +12,13 @@ import groupChatRoutes from './routes/group-chat-routes';
 import { groupRoutes } from "./routes/groupRoutes";
 import { userRoutes } from "./routes/userRoutes";
 import { expressjwt } from "express-jwt";
+import { authenticateJWT } from "./middelwares/authenticateJWT";
 
-import jwksRsa from"jwks-rsa";
 
 dotenv.config();
 const app = express();
 
-const {
-  AWS_REGION,
-  USER_POOL_ID,
-  CLIENT_ID,
-  PORT
-} = process.env;
+
 app.use(cors({
   origin: "http://localhost:8081", // hoặc web app của bạn
   credentials: true,
@@ -34,19 +29,8 @@ app.options("*", cors({
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type"]
 }));
-console.log(AWS_REGION)
 app.use(express.json());
-const authenticateJWT = expressjwt({
-  secret: jwksRsa.expressJwtSecret({
-    jwksUri: `https://cognito-idp.${AWS_REGION}.amazonaws.com/${USER_POOL_ID}/.well-known/jwks.json`,
-    cache: true,
-    rateLimit: true,
-    jwksRequestsPerMinute: 5,
-  }),
-  audience: CLIENT_ID,
-  issuer: `https://cognito-idp.${AWS_REGION}.amazonaws.com/${USER_POOL_ID}`,
-  algorithms: ["RS256"],
-});
+
 
 // app.use(express.static(path.join(__dirname, "views")));
 
@@ -71,10 +55,16 @@ app.use((req, res, next) => {
 
   next();
 });
-app.use('/api/user',authenticateJWT, userRoutes)
+app.use('/api/user', authenticateJWT, userRoutes)
 // Socket.IO
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:8081", // hoặc "*" để cho tất cả
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 socketHandler(io);
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err.name === "UnauthorizedError") {
@@ -84,7 +74,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   console.error("❌ Unknown error:", err);
   res.status(500).json({ message: "Internal Server Error" });
 });
-server.listen(3000,'0.0.0.0', () => {
+server.listen(3000, '0.0.0.0', () => {
   console.log("Server is running on http://localhost:3000");
 });
 
