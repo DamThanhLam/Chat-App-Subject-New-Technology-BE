@@ -41,6 +41,15 @@ export class UserService {
     return !isDuplicate;
   }
 
+  async getAllUsers(): Promise<User[]> {
+    return await this.userRepository.getUsers();
+  }
+
+
+  async getUserById(id: string): Promise<User | null> {
+    return await this.userRepository.findById(id);
+  }
+
   async updateUserInfo(id: string, data: Partial<User>): Promise<User> {
     const user = await this.userRepository.findById(id);
     if (!user) {
@@ -53,6 +62,10 @@ export class UserService {
     return updatedUser;
   }
 
+  async deleteUser(id: string): Promise<boolean> {
+    return await this.userRepository.deleteUser(id);
+  }
+  
   async createInviteLink(groupId: string, expiresInDays: number = 7): Promise<string> {
     const group = await this.groupRepository.getGroupById(groupId);
     if (!group) {
