@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { User } from "../models/user";
 import { hashPassword } from "../encryption/scrypto/scrypto";
-import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand, UpdateCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 const client = new DynamoDBClient({ region: "us-east-1" }); 
@@ -89,6 +89,16 @@ export class UserRepository {
     } as User;
   }
 
+  async deleteUser(id: string): Promise<boolean> {
+    const params = new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: { id }
+    });
+
+    await docClient.send(params);
+    return true;
+  }
+
   async addUserToGroup(userId: string, groupId: string): Promise<void> {
     const user = await this.findById(userId);
     if (user) {
@@ -100,3 +110,4 @@ export class UserRepository {
   }
   
 }
+
