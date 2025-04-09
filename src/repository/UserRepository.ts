@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import { User } from "../models/user";
 import { hashPassword } from "../encryption/scrypto/scrypto";
 import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { dynamoDBClient } from "../config/aws-config";
 
-const client = new DynamoDBClient({ region: "us-east-1" }); 
+const client = dynamoDBClient; 
 const docClient = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = "User"; 

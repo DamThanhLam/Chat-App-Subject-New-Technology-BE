@@ -20,6 +20,9 @@ export class UserService {
     this.inviteLinkRepository = new InviteLinkRepository();
   }
 
+  async getUserById(id: string): Promise<User | null> {
+    return await this.userRepository.findById(id);
+  }
   async register(user: User, account: Account): Promise<User | null> {
     const canRegister = await this.checkBeforeRegister(user);
     if (canRegister) {
