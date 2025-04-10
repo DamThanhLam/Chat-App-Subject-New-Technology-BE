@@ -12,7 +12,7 @@ export function decryptedPassword(encryptedPassword: string): string {
     // ✅ Dùng đúng hàm giải mã
     {
       key: privateKey,
-      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      padding: crypto.constants.RSA_PKCS1_PADDING,
       oaepHash: "sha256",
     },
     Buffer.from(encryptedPassword, "base64") // 🔍 Đảm bảo đầu vào là Buffer
