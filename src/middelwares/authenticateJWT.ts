@@ -33,7 +33,7 @@ const client = jwksClient({
 });
 // Lấy public key từ JWKS để xác thực token
 function getKey(header: JwtHeader, callback: SigningKeyCallback) {
-  client.getSigningKey(header.kid as string, (err:any, key:any) => {
+  client.getSigningKey(header.kid as string, (err: any, key: any) => {
     if (err) return callback(err, undefined);
     const signingKey = key?.getPublicKey();
     callback(null, signingKey);
@@ -42,12 +42,23 @@ function getKey(header: JwtHeader, callback: SigningKeyCallback) {
 
 // Middleware xác thực
 export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void) {
-  const token = socket.handshake.auth?.token;
+  // const token = socket.handshake.auth?.token;
+  const rawToken =
+    socket.handshake.auth?.token ||
+    socket.handshake.headers['auth'];// từ headers string (Postman dễ dùng)
 
+  const token = Array.isArray(rawToken) ? rawToken[0] : rawToken;
+  console.log(token)
   if (!token) {
     return next(new Error("No token provided"));
   }
 
+  const decodedHeader = jwt.decode(token, { complete: true }) as { header: JwtHeader };
+  console.log("Decoded JWT Header:", decodedHeader.header);
+
+  if (!decodedHeader.header.kid) {
+    return next(new Error("Token missing 'kid' in header"));
+  }
   jwt.verify(
     token,
     getKey,

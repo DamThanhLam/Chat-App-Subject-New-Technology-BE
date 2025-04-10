@@ -30,14 +30,23 @@ export function socketHandler(io: Server) {
     // });
 
 
-    socket.on("private-message", (message: Message) => {
+    socket.on("private-message", (raw: string | object) => {
+      let message: Message;
+
+      if (typeof raw === "string") {
+        try {
+          message = JSON.parse(raw);
+        } catch (e) {
+          console.error("Invalid JSON:", e);
+          return;
+        }
+      } else {
+        message = raw as Message;
+      }
+
       const user = (socket as any).user;
-
-      const receiverSocketId = users[message.receiverId];
-
       message.senderId = user.sub;
-      message.updateAt = message.creatAt = new Date().toISOString();
-
+      const receiverSocketId = users[message.receiverId];
       try {
         messageService.post(message)
         // Nếu tìm được người nhận thì gửi tin nhắn
@@ -60,7 +69,12 @@ export function socketHandler(io: Server) {
 
     socket.on("disconnect", () => {
       console.log(`${users[socket.id]} disconnected.`);
-      delete users[socket.id];
+      const user = (socket as any).user;
+      if (!user) {
+        console.warn("User not authenticated properly");
+        return;
+      }
+      delete users[user.sub];
       io.emit("user-list", Object.values(users));
     });
   });
