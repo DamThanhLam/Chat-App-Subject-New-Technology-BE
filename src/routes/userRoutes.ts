@@ -7,12 +7,13 @@ import S3Service from "../aws_service/s3.service";
 const router = Router();
 const userService = new UserService();
 
-router.put("/:id", async (req, res) => { 
-  const id = req.params.id;
+router.put("/", async  (req: Request & { auth?: any }, res: Response) => { 
+  const userId = req.auth?.sub;
+
   const data = req.body;
 
   try {
-    const updatedUser = await userService.updateUserInfo(id, data);  
+    const updatedUser = await userService.updateUserInfo(userId, data);  
 
     console.log("Updated user before response:", updatedUser); 
 

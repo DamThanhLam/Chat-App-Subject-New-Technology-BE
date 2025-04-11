@@ -61,12 +61,12 @@ export default class MessageService {
         }
 
         // Gán thời gian nếu chưa có
-        if (!message.creatAt) {
-            message.creatAt = new Date().toISOString();
+        if (!message.createdAt) {
+            message.createdAt = new Date().toISOString();
         }
 
-        if (!message.updateAt) {
-            message.updateAt = message.creatAt;
+        if (!message.updatedAt) {
+            message.updatedAt = message.createdAt;
         }
         if (message.contentType === "file") {
             const file:any = message.message;
@@ -75,6 +75,12 @@ export default class MessageService {
         }
         return messageRepository.post(message)
 
+    }
+    async getByReceiverId(userId:string,friendId:string,exclusiveStartKey: string):Promise<Message[] | null>{
+        return await messageRepository.getMessagesByFriendId(userId, friendId,exclusiveStartKey);
+    }
+    async getLatestMessage(userId:string,friendId:string):Promise<Message | null>{
+        return await messageRepository.getLatestMessage(userId, friendId);
     }
 
 }

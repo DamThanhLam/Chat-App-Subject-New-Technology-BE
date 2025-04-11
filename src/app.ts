@@ -13,6 +13,7 @@ import { groupRoutes } from "./routes/groupRoutes";
 import { userRoutes } from "./routes/userRoutes";
 import { expressjwt } from "express-jwt";
 import { authenticateJWT } from "./middelwares/authenticateJWT";
+import { messageRoute } from "./routes/messageRoute";
 
 
 dotenv.config();
@@ -56,6 +57,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use('/api/user', authenticateJWT, userRoutes)
+app.use('/api/message', authenticateJWT, messageRoute)
 // Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
