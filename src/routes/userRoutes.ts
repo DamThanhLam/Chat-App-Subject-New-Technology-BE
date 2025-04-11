@@ -15,11 +15,11 @@ router.put("/", async  (req: Request & { auth?: any }, res: Response) => {
   try {
     const updatedUser = await userService.updateUserInfo(userId, data);  
 
-    console.log("Updated user before response:", updatedUser); 
+    console.log("Updated user before response:", updatedUser);
 
     res.json({
       message: "User updated successfully",
-      user: updatedUser
+      user: updatedUser,
     });
   } catch (error: any) {
     console.error("Error updating user:", error);
@@ -50,18 +50,17 @@ router.post("/:id/avatar", upload_file.single("image"), async (req, res) => {
   }
 
   // Ví dụ tạo URL giả định từ server local
-  const avatar = await S3Service.post(file)
+  const avatar = await S3Service.post(file);
 
   try {
     // const updatedUser = await userService.updateUserInfo(id, { avatarUrl });
     res.json({
       message: "Avatar updated successfully",
-      avatar:avatar,
+      avatar: avatar,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
-  
-export { router as userRoutes };
 
+export { router as userRoutes };

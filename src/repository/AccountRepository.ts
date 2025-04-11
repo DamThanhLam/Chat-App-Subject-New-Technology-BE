@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import Account from "../models/Account";
 import { hashPassword, verifyPassword } from "../encryption/scrypto/scrypto";
+import { log } from "console";
 
 const accounts = new Array();
 export class AccountRepository {
@@ -11,6 +12,8 @@ export class AccountRepository {
     accounts.push(account);
   }
   async login(email: string, password: string): Promise<boolean> {
+    console.log("accounts", accounts);
+
     const results = await Promise.all(
       accounts.map(async (item) => {
         return (

@@ -1,13 +1,19 @@
 import { randomUUID } from "crypto";
 import { User } from "../models/user";
 import { hashPassword } from "../encryption/scrypto/scrypto";
-import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  GetCommand,
+  ScanCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { dynamoDBClient } from "../config/aws-config";
 
-const client = dynamoDBClient; 
+const client = dynamoDBClient;
 const docClient = DynamoDBDocumentClient.from(client);
 
-const TABLE_NAME = "User"; 
+const TABLE_NAME = "User";
 
 export class UserRepository {
   async createUser(user: User): Promise<User> {
@@ -17,7 +23,7 @@ export class UserRepository {
 
     const params = new PutCommand({
       TableName: TABLE_NAME,
-      Item: user
+      Item: user,
     });
 
     await docClient.send(params);
@@ -29,46 +35,55 @@ export class UserRepository {
     const result = await docClient.send(params);
 
     // Chuyển đổi ngày từ string về Date (nếu cần)
-    return result.Items?.map(user => ({
+    return result.Items?.map((user) => ({
       ...user,
       createdAt: new Date(user.createdAt),
-      updatedAt: new Date(user.updatedAt)
+      updatedAt: new Date(user.updatedAt),
     })) as User[];
   }
 
   async findById(id: string): Promise<User | null> {
     const params = new GetCommand({
       TableName: TABLE_NAME,
-      Key: { id }
+      Key: { id },
     });
 
     const result = await docClient.send(params);
     if (!result.Item) return null;
+    console.log(`User found: ${JSON.stringify(result.Item)}`);
 
     return {
       ...result.Item,
       createdAt: new Date(result.Item.createdAt),
-      updatedAt: new Date(result.Item.updatedAt)
+      updatedAt: new Date(result.Item.updatedAt),
     } as User;
   }
 
-  async updateUser(id: string, updatedData: Partial<User>): Promise<User | null> {
+  async updateUser(
+    id: string,
+    updatedData: Partial<User>
+  ): Promise<User | null> {
     (updatedData as any).updatedAt = new Date().toISOString();
-
 
     const updateExpression = `set ${Object.keys(updatedData)
       .map((key, index) => `#${key} = :value${index}`)
       .join(", ")}`;
 
-    const expressionAttributeNames = Object.keys(updatedData).reduce((acc, key, index) => {
-      acc[`#${key}`] = key;
-      return acc;
-    }, {} as Record<string, string>);
+    const expressionAttributeNames = Object.keys(updatedData).reduce(
+      (acc, key, index) => {
+        acc[`#${key}`] = key;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
 
-    const expressionAttributeValues = Object.keys(updatedData).reduce((acc, key, index) => {
-      acc[`:value${index}`] = updatedData[key as keyof User]; // Đảm bảo giá trị đúng kiểu
-      return acc;
-    }, {} as Record<string, any>);
+    const expressionAttributeValues = Object.keys(updatedData).reduce(
+      (acc, key, index) => {
+        acc[`:value${index}`] = updatedData[key as keyof User]; // Đảm bảo giá trị đúng kiểu
+        return acc;
+      },
+      {} as Record<string, any>
+    );
 
     const params = new UpdateCommand({
       TableName: TABLE_NAME,
@@ -76,7 +91,7 @@ export class UserRepository {
       UpdateExpression: updateExpression,
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: "ALL_NEW"
+      ReturnValues: "ALL_NEW",
     });
 
     const result = await docClient.send(params);
@@ -85,7 +100,7 @@ export class UserRepository {
     return {
       ...result.Attributes,
       createdAt: new Date(result.Attributes.createdAt),
-      updatedAt: new Date(result.Attributes.updatedAt)
+      updatedAt: new Date(result.Attributes.updatedAt),
     } as User;
   }
 
@@ -98,5 +113,4 @@ export class UserRepository {
       console.error(`User ${userId} not found`);
     }
   }
-  
 }
