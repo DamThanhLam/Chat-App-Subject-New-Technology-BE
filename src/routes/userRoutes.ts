@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { UserService } from "../services/UserService";
-
+import { Request, Response } from "express";
 import upload_file from "../middelwares/upload_file"
 import S3Service from "../aws_service/s3.service";
 
@@ -26,9 +26,10 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/", async (req: Request & { auth?: any }, res: Response) => {
   try {
-    const user = await userService.getUserById(req.params.id); 
+    const userId = req.auth?.sub;
+    const user = await userService.getUserById(userId); 
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json(user);
   } catch (err: any) {
