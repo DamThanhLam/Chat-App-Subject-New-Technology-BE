@@ -1,4 +1,3 @@
-// src/services/nicknameService.ts
 import * as nicknameRepository from "../repository/NickNameRepository";
 
 // Đổi tên ghi nhớ
