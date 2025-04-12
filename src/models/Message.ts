@@ -10,6 +10,7 @@ export interface Message {
     messageType: "group" | "private";
     contentType: "file" | "emoji" | "text";
     receiverId: string;
+    status:"recalled"|"deleted"|"readed"|"sended"|"received"
 }
 export interface FileMessage {
     data: string|Buffer; // base64 string hoặc buffer

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { Message } from "../models/Message";
-import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { dynamoDBClient } from "../config/aws-config";
 import { AttributeValue, ScanCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
@@ -63,5 +63,18 @@ export class MessageRepository {
             .map((item) => unmarshall(item) as Message)
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         return messages[0] ?? null;
+    }
+    async getById(messageId: string):Promise<Message | null>{
+        const command = new GetCommand({ TableName: TABLE_NAME, Key: { "id": { S: messageId } } })
+        const result = await docClient.send(command);
+        const item = result.Item;
+        if (!item) {
+            return null; // hoặc throw new Error("Not found")
+        }
+        return unmarshall(item) as Message
+    }
+    async update(message:Message){
+        const command = new PutCommand({TableName:TABLE_NAME,Item:message})
+        await docClient.send(command)
     }
 }

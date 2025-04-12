@@ -117,5 +117,11 @@ export default class MessageService {
     async getLatestMessage(userId: string, friendId: string): Promise<Message | null> {
         return await messageRepository.getLatestMessage(userId, friendId);
     }
+    async getById(messageId: string):Promise<Message | null>{
+        return await messageRepository.getById(messageId)
+    }
+    async update(message: Message){
+        await messageRepository.update(message)
+    }
 
 }
