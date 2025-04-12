@@ -38,29 +38,29 @@ router.get("/get-latest-message", async (req: Request & { auth?: any }, res: Res
       res.status(500).json({ error: err.message });
     }
   });
-/**
- * POST /api/user/:id/avatar
- * Upload avatar
- */
-router.post("/avatar", upload_file.single("image"), async (req, res) => {
-  const file = req.file;
-  if (!file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
+// /**
+//  * POST /api/user/:id/avatar
+//  * Upload avatar
+//  */
+// router.post("/avatar", upload_file.single("image"), async (req, res) => {
+//   const file = req.file;
+//   if (!file) {
+//     return res.status(400).json({ error: "No file uploaded" });
+//   }
 
-  // Ví dụ tạo URL giả định từ server local
-  const avatar = await S3Service.post(file)
+//   // Ví dụ tạo URL giả định từ server local
+//   const avatar = await S3Service.post(file)
 
-  try {
-    // const updatedUser = await userService.updateUserInfo(id, { avatarUrl });
-    res.json({
-      message: "Avatar updated successfully",
-      avatar:avatar,
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+//   try {
+//     // const updatedUser = await userService.updateUserInfo(id, { avatarUrl });
+//     res.json({
+//       message: "Avatar updated successfully",
+//       avatar:avatar,
+//     });
+//   } catch (error: any) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
   
 export { router as messageRoute };
 

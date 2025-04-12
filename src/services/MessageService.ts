@@ -1,6 +1,10 @@
+import path from "path";
+import fs from "fs";
+import FileType from "file-type";
 import S3Service from "../aws_service/s3.service";
-import { Message } from "../models/Message";
+import { FileMessage, Message } from "../models/Message";
 import { MessageRepository } from "../repository/MessageRepository";
+
 const messageRepository = new MessageRepository();
 export default class MessageService {
     async post(message: Message) {
@@ -24,17 +28,47 @@ export default class MessageService {
                 break;
 
             case "file":
-                const file = message.message;
+                const file = message.message as FileMessage;
+                console.log("Received file.data:", !file.data, "Type:", typeof file.data,"file name: " ,file.filename);
 
                 if (
                     typeof file !== "object" ||
                     !file.data ||
-                    !file.filename ||
-                    !file.mimetype ||
-                    typeof file.size !== "number"
+                    !file.filename
                 ) {
-                    throw new Error("File message must contain data, filename, mimetype, and size.");
+                    throw new Error("File message must contain data, filename");
                 }
+                //Tự động gán size
+                if (typeof file.data === "string") {
+                    const uploadPath = path.join(__dirname, "../uploads");
+                    await fs.promises.mkdir(uploadPath, { recursive: true });
+                    // Nếu là base64
+                    // Giả sử bạn có dữ liệu base64 và tên file
+                    const base64Data = file.data; // từ socket
+                    const buffer = Buffer.from(base64Data, "base64");
+                    const filePath = path.join(__dirname, "../uploads", file.filename);
+                   
+                    // Ghi file ra đĩa
+                    await fs.promises.writeFile(filePath, buffer);
+
+                    // Lúc này bạn có thể lấy file size an toàn
+                    const { size } = await fs.promises.stat(filePath);
+
+                    file.size = size
+                    file.data = buffer;
+
+                    const type = await FileType.fromBuffer(buffer);
+                    file.mimetype = type ? type.mime : "";
+                } else if (Buffer.isBuffer(file.data)) {
+                    const buffer = file.data;
+                    file.size = buffer.length;
+                    const type = await FileType.fromBuffer(buffer);
+                    file.mimetype = type ? type.mime : "";
+                }else {
+                    throw new Error("Cannot determine file size.");
+                }
+
+               
 
                 // Kiểm tra kiểu file hợp lệ
                 const allowedMimeTypes = [
@@ -44,6 +78,7 @@ export default class MessageService {
                     "video/mp4",
                     "video/quicktime"
                 ];
+                console.log(file)
                 if (!allowedMimeTypes.includes(file.mimetype)) {
                     throw new Error("Unsupported file type. Only image/video files are allowed.");
                 }
@@ -69,17 +104,17 @@ export default class MessageService {
             message.updatedAt = message.createdAt;
         }
         if (message.contentType === "file") {
-            const file:any = message.message;
+            const file: any = message.message;
             const urlFile = await S3Service.post({ buffer: file.data, originalname: file.filename })
             message.message = urlFile;
         }
         return messageRepository.post(message)
 
     }
-    async getByReceiverId(userId:string,friendId:string,exclusiveStartKey: string):Promise<Message[] | null>{
-        return await messageRepository.getMessagesByFriendId(userId, friendId,exclusiveStartKey);
+    async getByReceiverId(userId: string, friendId: string, exclusiveStartKey: string): Promise<Message[] | null> {
+        return await messageRepository.getMessagesByFriendId(userId, friendId, exclusiveStartKey);
     }
-    async getLatestMessage(userId:string,friendId:string):Promise<Message | null>{
+    async getLatestMessage(userId: string, friendId: string): Promise<Message | null> {
         return await messageRepository.getLatestMessage(userId, friendId);
     }
 

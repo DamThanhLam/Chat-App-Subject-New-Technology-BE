@@ -11,9 +11,9 @@ export interface Message {
     contentType: "file" | "emoji" | "text";
     receiverId: string;
 }
-interface FileMessage {
-    data: Buffer | string; // base64 string hoặc buffer
+export interface FileMessage {
+    data: string|Buffer; // base64 string hoặc buffer
     filename: string;
-    mimetype: string;
-    size: number;
+    mimetype?: string;
+    size?: number;
 }
