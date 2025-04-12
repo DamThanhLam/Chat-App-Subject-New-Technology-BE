@@ -7,6 +7,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { Conversation, createConversationModel } from "../models/Conversation";
 import { dynamoDBClient } from "../config/aws-config";
+import { paginateScan } from "../utils/pagination";
 
 const client = dynamoDBClient;
 const docClient = DynamoDBDocumentClient.from(client);
@@ -71,4 +72,23 @@ export const addUsersToConversation = async (
 
   const result = await docClient.send(command);
   return result.Attributes as Conversation;
+};
+
+export const findCommonGroups = async (
+  userId: string,
+  targetUserId: string,
+  page: number = 1,
+  limit: number = 10
+) => {
+  const params = {
+    TableName: "Conversation",
+    FilterExpression:
+      "messageType = :messageType AND contains(participants, :userId) AND contains(participants, :targetUserId)",
+    ExpressionAttributeValues: {
+      ":messageType": "group",
+      ":userId": userId,
+      ":targetUserId": targetUserId,
+    },
+  };
+  return paginateScan<Conversation>(docClient, params, page, limit);
 };

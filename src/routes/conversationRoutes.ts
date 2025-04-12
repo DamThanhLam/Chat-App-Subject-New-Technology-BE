@@ -67,4 +67,50 @@ router.post(
   }
 );
 
+router.get(
+  "/common-groups/:targetUserId",
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const userId = req.auth?.sub; // Lấy userId từ auth
+      const { targetUserId } = req.params; // Lấy targetUserId từ params
+      const { page, limit } = req.query; // Lấy page, limit từ query parameter
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
+
+      if (!targetUserId) {
+        return res.status(400).json({ error: "Missing targetUserId" });
+      }
+
+      const pageNum = page ? parseInt(page as string, 10) : 1;
+      const limitNum = limit ? parseInt(limit as string, 10) : 10;
+
+      if (isNaN(pageNum) || pageNum < 1) {
+        return res
+          .status(400)
+          .json({ error: "Page must be a positive number" });
+      }
+
+      if (isNaN(limitNum) || limitNum < 1) {
+        return res
+          .status(400)
+          .json({ error: "Limit must be a positive number" });
+      }
+
+      const result = await conversationService.findCommonGroups(
+        userId,
+        targetUserId,
+        pageNum,
+        limitNum
+      );
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 export default router;

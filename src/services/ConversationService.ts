@@ -87,3 +87,37 @@ export const addUsersToGroup = async (
     throw new Error(`Failed to add users to group: ${error.message}`);
   }
 };
+
+export const findCommonGroups = async (
+  userId: string,
+  targetUserId: string,
+  page: number = 1,
+  limit: number = 10
+) => {
+  try {
+    if (!userId || !targetUserId) {
+      throw new Error("Missing required user IDs");
+    }
+
+    if (typeof userId !== "string" || typeof targetUserId !== "string") {
+      throw new Error("User IDs must be strings");
+    }
+
+    const result = await conversationRepository.findCommonGroups(
+      userId,
+      targetUserId,
+      page,
+      limit
+    );
+
+    return {
+      groups: result.items,
+      currentPage: result.currentPage,
+      totalPages: result.totalPages,
+      totalItems: result.totalItems,
+      limit: result.limit,
+    };
+  } catch (error: any) {
+    throw new Error(`Failed to find common groups: ${error.message}`);
+  }
+};
