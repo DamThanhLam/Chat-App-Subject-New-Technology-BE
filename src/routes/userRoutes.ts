@@ -3,6 +3,7 @@ import { UserService } from "../services/UserService";
 
 import upload_file from "../middelwares/upload_file"
 import S3Service from "../aws_service/s3.service";
+import { getFriendList, getFriendListAccept, getPendingFriendRequests } from "../services/FriendService";
 
 const router = Router();
 const userService = new UserService();
@@ -60,6 +61,45 @@ router.post("/:id/avatar", upload_file.single("image"), async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-  
+
+import { Request } from "express";
+interface AuthRequest extends Request {
+  auth?: { sub?: string };
+}
+
+router.get("/friends/requests", async (req: AuthRequest, res) => {
+  const userId = req.auth?.sub; // lấy userId từ token đã giải mã
+
+  if (!userId) {
+    return res.status(401).json({ message: "Invalid or missing token" });
+  }
+
+  try {
+    const requests = await getPendingFriendRequests(userId);
+    res.status(200).json({ requests }); // sửa chỗ này: trả về đúng key là `requests`
+  } catch (error) {
+    console.error("Error fetching friend requests:", error);
+    res.status(500).json({ message: "Failed to get friend requests" });
+  }
+});
+
+
+router.get("/friends", async (req: AuthRequest, res) => {
+  const userId = req.auth?.sub;
+
+  if (!userId) {
+    return res.status(401).json({ message: "Invalid or missing token" });
+  }
+
+  try {
+    const friends = await getFriendListAccept(userId);
+    res.status(200).json({ friends });
+  } catch (error) {
+    console.error("Error fetching friends:", error);
+    res.status(500).json({ message: "Failed to get friends" });
+  }
+});
+
+
 export { router as userRoutes };
 

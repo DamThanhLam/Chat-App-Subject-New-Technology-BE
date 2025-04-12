@@ -66,6 +66,52 @@ export function socketHandler(io: Server) {
 
     });
 
+    // Server-side code (Node.js with Socket.IO)
+    socket.on("send-friend-request", (data) => {
+      console.log("Received data:", data); // Kiểm tra dữ liệu truyền vào
+    
+      const user = (socket as any).user;
+      const receiverSocketId = users[data.receiverId];
+      
+      if (!receiverSocketId) {
+        socket.emit("error", { error: "Người nhận không online", code: 404 });
+        return;
+      }
+    
+      io.to(receiverSocketId).emit("new-friend-request", {
+        fromUser: {
+          id: user.sub,
+          name: user.name,
+          avatar: user.avatar,
+        },
+      });
+    
+      socket.emit("result", {
+        code: 200,
+        message: "Yêu cầu kết bạn đã được gửi.",
+      });
+    });
+    
+    
+
+
+    // Lắng nghe sự kiện "accept-friend-request" để xử lý khi chấp nhận lời mời kết bạn
+    socket.on("accept-friend-request", (data: any) => {
+      const user = (socket as any).user;
+
+      if (!user) {
+        console.warn("User not authenticated properly");
+        return;
+      }
+
+      console.log("Lời mời kết bạn được chấp nhận bởi:", data.accepter);
+
+      // Cập nhật thông tin kết bạn vào cơ sở dữ liệu hoặc các logic khác tại đây
+
+      // Gửi sự kiện "friend-request-accepted" đến client sau khi xử lý thành công
+      io.emit("friend-request-accepted", { by: data.accepter });
+      console.log("Đã phát sự kiện friend-request-accepted.");
+    });
 
     socket.on("disconnect", () => {
       console.log(`${users[socket.id]} disconnected.`);

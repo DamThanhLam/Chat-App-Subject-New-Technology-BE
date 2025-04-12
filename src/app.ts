@@ -15,6 +15,7 @@ import { expressjwt } from "express-jwt";
 import { authenticateJWT } from "./middelwares/authenticateJWT";
 
 
+
 dotenv.config();
 const app = express();
 
@@ -45,17 +46,18 @@ app.use(express.json());
 // app.use('/api',groupRoutes)
 app.use((req, res, next) => {
   const authHeader = req.headers.authorization;
-
   if (authHeader) {
     const token = authHeader.split(" ")[1]; // Bearer <token>
     console.log("👉 JWT Token:", token);
   } else {
     console.warn("⚠️ No Authorization header found.");
   }
-
   next();
 });
+
 app.use('/api/user', authenticateJWT, userRoutes)
+app.use("/api/friends", authenticateJWT, friendRoutes);
+
 // Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
