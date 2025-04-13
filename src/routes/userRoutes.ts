@@ -27,6 +27,29 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+router.get("/search", async (req, res) => {
+  const { email } = req.query;
+  console.log("Searching for email:", email); 
+
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ message: "Invalid email query" });
+  }
+
+  try {
+    // userRoutes.ts
+    const emailNormalized = (email as string).toLowerCase();
+    const users = await userService.findUsersByEmail(emailNormalized);
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: "No users found" });
+    }
+    return res.status(200).json({ users });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Something went wrong';
+    return res.status(500).json({ message: errorMessage });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   try {
     const user = await userService.getUserById(req.params.id); 

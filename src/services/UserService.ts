@@ -106,4 +106,11 @@ export class UserService {
 
     return `User ${userId} joined group ${inviteLink.groupId} successfully`;
   }
+
+  async findUsersByEmail(email: string): Promise<User[]> {
+    if (!email) {
+      throw new Error("Email is required");
+    }
+    return await this.userRepository.findUsersByEmail(email);
+  }
 }
