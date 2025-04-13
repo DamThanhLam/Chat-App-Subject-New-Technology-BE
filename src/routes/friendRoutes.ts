@@ -1,69 +1,102 @@
 import { Router, Request, Response } from "express";
-import { FriendService } from "../services/FriendService";
+import * as FriendService from "../services/FriendService";
+import { authenticateJWT } from "../middelwares/authenticateJWT";
+import { FriendStatus } from "../models/Friend";
 
 const router = Router();
-const friendService = new FriendService();
 
-router.post("/send-request", async (req: Request, res: Response) => {
+/**
+ * GET /api/friends/get-friends/:userId
+ * Trả về danh sách bạn bè của user
+ */
+router.get("/get-friends/:userId", async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
   try {
-    const { senderId, receiverId, message } = req.body;
-    if (!senderId || !receiverId) {
-      return res.status(400).json({ error: "Missing required fields" });
+    const friends = await FriendService.getFriendList(userId);
+
+    return res.status(200).json({ friends });
+  } catch (error) {
+    console.error("Error getting friends:", error);
+    return res.status(500).json({ message: "Failed to get friends" });
+  }
+});
+
+/**
+ * POST /api/friends/add
+ * Tạo một lời mời kết bạn mới
+ */
+router.post("/add", async (req: Request, res: Response) => {
+  const { senderId, receiverId, message } = req.body;
+
+  if (!senderId || !receiverId) {
+    return res.status(400).json({ message: "Missing senderId or receiverId" });
+  }
+
+  try {
+    const friend = await FriendService.addFriend(senderId, receiverId, message);
+    return res.status(201).json(friend);
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "Đã là bạn bè, không thể gửi lời mời kết bạn") {
+      return res.status(400).json({ message: err.message });
     }
-
-    await friendService.sendFriendRequest(senderId, receiverId, message);
-    res.status(201).json({ message: "Friend request sent successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error creating friend:", err);
+    return res.status(500).json({ message: "Failed to create friend" });
   }
 });
 
-router.get("/list/:userId", async (req: Request, res: Response) => {
-    try {
-      const { userId } = req.params;
-      const friends = await friendService.getFriendRequests(userId);
-      res.json(friends);
-    } catch (error) {
-      console.error("Error fetching friend requests:", error);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  });
-  
 
-router.post("/accept/:id", async (req: Request, res: Response) => {
+router.get("/requests/:userId", authenticateJWT , async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
   try {
-    await friendService.acceptFriendRequest(req.params.id);
-    res.json({ message: "Friend request accepted" });
+    const pendingRequests = await FriendService.getPendingFriendRequests(userId);
+    return res.status(200).json({ requests: pendingRequests });
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error getting pending friend requests:", error);
+    return res.status(500).json({ message: "Failed to get pending friend requests" });
   }
 });
 
-router.post("/decline/:id", async (req: Request, res: Response) => {
+router.post("/accept/:userId", authenticateJWT, async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
   try {
-    await friendService.declineFriendRequest(req.params.id);
-    res.json({ message: "Friend request declined" });
+    const updated = await FriendService.acceptFriendRequest(userId);
+    return res.status(200).json(updated);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error accepting friend request:", error);
+    return res.status(500).json({ message: "Failed to accept friend request" });
   }
 });
 
-router.post("/cancel/:id", async (req: Request, res: Response) => {
+router.post("/accept/:friendRequestId", async (req: Request, res: Response) => {
+  const { friendRequestId } = req.params;
+
   try {
-    await friendService.cancelFriendRequest(req.params.id);
-    res.json({ message: "Friend request cancelled" });
+    const updatedRequest = await FriendService.acceptFriendRequest(friendRequestId);
+    return res.status(200).json(updatedRequest);
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error accepting friend request:", error);
+    return res.status(500).json({ message: "Failed to accept friend request" });
   }
 });
 
-router.delete("/remove/:id", async (req: Request, res: Response) => {
+
+router.delete("/cancel/:id", authenticateJWT, async (req: Request, res: Response) => {
+  const { id } = req.params;
+
   try {
-    await friendService.deleteFriendRequest(req.params.id);
-    res.json({ message: "Friend removed" });
+    await FriendService.cancelFriendRequest(id);
+    return res.status(200).json({ message: "Friend request cancelled" });
   } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error cancelling friend request:", error);
+    return res.status(500).json({ message: "Failed to cancel friend request" });
   }
 });
+
 
 export { router as friendRoutes };
+
+

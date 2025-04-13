@@ -113,4 +113,29 @@ export class UserRepository {
       console.error(`User ${userId} not found`);
     }
   }
+
+  // Tìm kiếm người dùng theo email
+  async findUsersByEmail(email: string): Promise<User[]> {
+    const params = new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "contains(email, :email)",
+      ExpressionAttributeValues: {
+        ":email": email
+      }
+    });
+  
+    try {
+      const result = await docClient.send(params);
+      console.log("Scan result:", result); // Debug thông tin trả về
+      return result.Items?.map(user => ({
+        ...user,
+        createdAt: new Date(user.createdAt),
+        updatedAt: new Date(user.updatedAt)
+      })) as User[] || [];
+    } catch (error) {
+      console.error("Error querying DynamoDB:", error); // Debug lỗi query
+      throw new Error("Error querying DynamoDB");
+    }
+  }
+  
 }

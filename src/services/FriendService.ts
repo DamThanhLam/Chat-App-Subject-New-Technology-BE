@@ -1,45 +1,45 @@
-import { FriendRepository } from "../repository/FriendRepository";
-import { v4 as uuidv4 } from "uuid";
+import { FriendStatus } from '../models/Friend';
+import { addFriendToAcceptedList, createFriend, declineFriendRequestById, getAcceptedFriendsByUserId, getFriendsByUserId, getPendingFriendRequestsByUserId, isAlreadyFriends, updateFriendStatus } from '../repository/FriendRepository';
 
-export class FriendService {
-  private friendRepository = new FriendRepository();
+export const getFriendList = async (userId: string) => {
+  const friends = await getFriendsByUserId(userId);
+  return friends || [];
+};
 
-  async sendFriendRequest(senderId: string, receiverId: string, message?: string) {
-    const friendRequest = {
-      id: uuidv4(),
-      senderId,
-      receiverId,
-      senderAVT: "", 
-      message: message || "",
-      status: "pending",
-      createAt: new Date().toISOString(),
-      updateAt: new Date().toISOString(),
-    };
-    return await this.friendRepository.createFriendRequest(friendRequest);
-  }
+export const getPendingFriendRequests = async (userId: string) => {
+  const requests = await getPendingFriendRequestsByUserId(userId);
+  return requests || [];
+};
 
-  async getFriendRequest(id: string) {
-    return await this.friendRepository.getFriendRequest(id);
-  }
-
-  async getFriendRequests(userId: string) {
-    return await this.friendRepository.getFriendRequests(userId);
-  }
+export const addFriend = async (senderId: string, receiverId: string, message?: string) => {
+  const isFriends = await isAlreadyFriends(senderId, receiverId);
   
-
-  async acceptFriendRequest(id: string) {
-    return await this.friendRepository.updateFriendStatus(id, "accepted");
+  if (isFriends) {
+    throw new Error("Đã là bạn bè, không thể gửi lời mời kết bạn");
   }
+  return await createFriend(senderId, receiverId, message);
+};
 
-  async declineFriendRequest(id: string) {
-    return await this.friendRepository.updateFriendStatus(id, "declined");
-  }
 
-  async cancelFriendRequest(id: string) {
-    return await this.friendRepository.updateFriendStatus(id, "cancelled");
-  }
+// export const acceptFriendRequest = async (id: string) => {
+//   return await updateFriendStatus(id, FriendStatus.ACCEPTED);
+// };
 
-  async deleteFriendRequest(id: string) {
-    return await this.friendRepository.deleteFriendRequest(id);
-  }
-}
+export const acceptFriendRequest = async (id: string) => {
+  const updatedRequest = await updateFriendStatus(id, FriendStatus.ACCEPTED);
+  
+  // Cập nhật danh sách bạn bè cho cả người gửi và người nhận
+  await addFriendToAcceptedList(updatedRequest.senderId, updatedRequest.receiverId);
+  await addFriendToAcceptedList(updatedRequest.receiverId, updatedRequest.senderId);
+  
+  return updatedRequest;
+};
+
+export const cancelFriendRequest = async (id: string) => {
+  return await declineFriendRequestById(id);
+};
+
+export const getFriendListAccept = async (userId: string) => {
+  const friends = await getAcceptedFriendsByUserId(userId);
+  return friends || [];
+};
