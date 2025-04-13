@@ -17,13 +17,11 @@ const TABLE_NAME = "Conversation";
 // Tạo cuộc trò chuyện mới
 export const createConversation = async (
   participants: string[],
-  messageType: "group" | "private" = "group",
   groupName?: string
 ): Promise<string> => {
   const conversationId = uuidv4();
   const conversation: Conversation = createConversationModel(
     participants,
-    messageType,
     groupName,
     conversationId
   );
@@ -50,7 +48,7 @@ export const getConversation = async (
   return (result.Item as Conversation) || null;
 };
 
-// Thêm người dùng vào nhóm chat
+// Cập nhật người tham gia cuộc trò chuyện
 export const addUsersToConversation = async (
   conversationId: string,
   newUserIds: string[]
@@ -64,9 +62,8 @@ export const addUsersToConversation = async (
     ExpressionAttributeValues: {
       ":participants": newUserIds,
       ":updateAt": now,
-      ":messageType": "group",
     },
-    ConditionExpression: "attribute_exists(id) AND messageType = :messageType",
+    ConditionExpression: "attribute_exists(id)", // Chỉ kiểm tra cuộc trò chuyện tồn tại
     ReturnValues: "UPDATED_NEW",
   });
 
@@ -74,6 +71,7 @@ export const addUsersToConversation = async (
   return result.Attributes as Conversation;
 };
 
+// Tìm các nhóm chung giữa hai người dùng
 export const findCommonGroups = async (
   userId: string,
   targetUserId: string,
@@ -81,11 +79,10 @@ export const findCommonGroups = async (
   limit: number = 10
 ) => {
   const params = {
-    TableName: "Conversation",
+    TableName: TABLE_NAME,
     FilterExpression:
-      "messageType = :messageType AND contains(participants, :userId) AND contains(participants, :targetUserId)",
+      "contains(participants, :userId) AND contains(participants, :targetUserId)",
     ExpressionAttributeValues: {
-      ":messageType": "group",
       ":userId": userId,
       ":targetUserId": targetUserId,
     },

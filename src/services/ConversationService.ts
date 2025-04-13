@@ -1,4 +1,4 @@
-// src/services/conversationService.ts
+// src/services/ConversationService.ts
 import * as conversationRepository from "../repository/ConversationRepository";
 import { Conversation } from "../models/Conversation";
 
@@ -11,25 +11,24 @@ export const createGroupFromChat = async (
 ) => {
   try {
     if (!currentUserId || !friendUserId) {
-      throw new Error("Missing required user IDs");
+      throw new Error("Thiếu ID người dùng bắt buộc");
     }
 
     const participants = [currentUserId, friendUserId, ...additionalUserIds];
     const uniqueParticipants = [...new Set(participants)];
 
     if (!uniqueParticipants.every((id) => typeof id === "string")) {
-      throw new Error("All user IDs must be strings");
+      throw new Error("Tất cả ID người dùng phải là chuỗi");
     }
 
     const conversationId = await conversationRepository.createConversation(
       uniqueParticipants,
-      "group",
       groupName
     );
 
-    return { conversationId, message: "Group created successfully" };
+    return { conversationId, message: "Tạo nhóm thành công" };
   } catch (error: any) {
-    throw new Error(`Failed to create group: ${error.message}`);
+    throw new Error(`Không thể tạo nhóm: ${error.message}`);
   }
 };
 
@@ -46,32 +45,30 @@ export const addUsersToGroup = async (
       !newUserIds ||
       !Array.isArray(newUserIds)
     ) {
-      throw new Error("Missing or invalid required fields");
+      throw new Error("Thiếu hoặc dữ liệu không hợp lệ");
     }
 
     if (!newUserIds.every((id) => typeof id === "string")) {
-      throw new Error("All new user IDs must be strings");
+      throw new Error("Tất cả ID người dùng mới phải là chuỗi");
     }
 
     const conversation: Conversation | null =
       await conversationRepository.getConversation(conversationId);
     if (!conversation) {
-      throw new Error("Conversation not found");
-    }
-
-    if (conversation.messageType !== "group") {
-      throw new Error("This conversation is not a group chat");
+      throw new Error("Không tìm thấy cuộc trò chuyện");
     }
 
     if (!conversation.participants.includes(currentUserId)) {
-      throw new Error("You are not a member of this group");
+      throw new Error("Bạn không phải là thành viên của nhóm này");
     }
 
     const alreadyInGroup = newUserIds.filter((id) =>
       conversation.participants.includes(id)
     );
     if (alreadyInGroup.length > 0) {
-      throw new Error(`Users already in group: ${alreadyInGroup.join(", ")}`);
+      throw new Error(
+        `Người dùng đã có trong nhóm: ${alreadyInGroup.join(", ")}`
+      );
     }
 
     const updatedParticipants = [
@@ -82,12 +79,13 @@ export const addUsersToGroup = async (
       updatedParticipants
     );
 
-    return { message: "Users added to group successfully" };
+    return { message: "Thêm người dùng vào nhóm thành công" };
   } catch (error: any) {
-    throw new Error(`Failed to add users to group: ${error.message}`);
+    throw new Error(`Không thể thêm người dùng vào nhóm: ${error.message}`);
   }
 };
 
+// Tìm các nhóm chung giữa hai người dùng
 export const findCommonGroups = async (
   userId: string,
   targetUserId: string,
@@ -96,11 +94,11 @@ export const findCommonGroups = async (
 ) => {
   try {
     if (!userId || !targetUserId) {
-      throw new Error("Missing required user IDs");
+      throw new Error("Thiếu ID người dùng bắt buộc");
     }
 
     if (typeof userId !== "string" || typeof targetUserId !== "string") {
-      throw new Error("User IDs must be strings");
+      throw new Error("ID người dùng phải là chuỗi");
     }
 
     const result = await conversationRepository.findCommonGroups(
@@ -118,6 +116,6 @@ export const findCommonGroups = async (
       limit: result.limit,
     };
   } catch (error: any) {
-    throw new Error(`Failed to find common groups: ${error.message}`);
+    throw new Error(`Không thể tìm nhóm chung: ${error.message}`);
   }
 };
