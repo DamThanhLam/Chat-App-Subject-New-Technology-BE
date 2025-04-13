@@ -7,6 +7,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { Conversation, createConversationModel } from "../models/Conversation";
 import { dynamoDBClient } from "../config/aws-config";
+import { paginateScan } from "../utils/pagination";
 
 const client = dynamoDBClient;
 const docClient = DynamoDBDocumentClient.from(client);
@@ -16,13 +17,11 @@ const TABLE_NAME = "Conversation";
 // Tạo cuộc trò chuyện mới
 export const createConversation = async (
   participants: string[],
-  messageType: "group" | "private" = "group",
   groupName?: string
 ): Promise<string> => {
   const conversationId = uuidv4();
   const conversation: Conversation = createConversationModel(
     participants,
-    messageType,
     groupName,
     conversationId
   );
@@ -49,7 +48,7 @@ export const getConversation = async (
   return (result.Item as Conversation) || null;
 };
 
-// Thêm người dùng vào nhóm chat
+// Cập nhật người tham gia cuộc trò chuyện
 export const addUsersToConversation = async (
   conversationId: string,
   newUserIds: string[]
@@ -63,12 +62,30 @@ export const addUsersToConversation = async (
     ExpressionAttributeValues: {
       ":participants": newUserIds,
       ":updateAt": now,
-      ":messageType": "group",
     },
-    ConditionExpression: "attribute_exists(id) AND messageType = :messageType",
+    ConditionExpression: "attribute_exists(id)", // Chỉ kiểm tra cuộc trò chuyện tồn tại
     ReturnValues: "UPDATED_NEW",
   });
 
   const result = await docClient.send(command);
   return result.Attributes as Conversation;
+};
+
+// Tìm các nhóm chung giữa hai người dùng
+export const findCommonGroups = async (
+  userId: string,
+  targetUserId: string,
+  page: number = 1,
+  limit: number = 10
+) => {
+  const params = {
+    TableName: TABLE_NAME,
+    FilterExpression:
+      "contains(participants, :userId) AND contains(participants, :targetUserId)",
+    ExpressionAttributeValues: {
+      ":userId": userId,
+      ":targetUserId": targetUserId,
+    },
+  };
+  return paginateScan<Conversation>(docClient, params, page, limit);
 };

@@ -13,7 +13,6 @@ const messageService = new MessageService();
 export function socketHandler(io: Server) {
   io.use(socketAuthMiddleware);
   io.on("connection", (socket: Socket) => {
-
     socket.on("join", () => {
       const user = (socket as any).user;
       if (!user) {
@@ -22,8 +21,8 @@ export function socketHandler(io: Server) {
       }
 
       users[user.sub] = socket.id;
-      console.log("users")
-      console.log(users)
+      console.log("users");
+      console.log(users);
     });
 
     // handleChat(socket, io);
@@ -51,22 +50,27 @@ export function socketHandler(io: Server) {
       message.senderId = user.sub;
       const receiverSocketId = users[message.receiverId];
       try {
-        messageService.post(message)
+        messageService.post(message);
         // Nếu tìm được người nhận thì gửi tin nhắn
         if (receiverSocketId) {
           io.to(receiverSocketId).emit("private-message", {
             message,
           });
           socket.emit("result", { code: 200, message: "send message success" });
-          return
+          return;
         } else {
-          socket.emit("error", { error: "Receiver is not connected.", code: 405 });
-          return
+          socket.emit("error", {
+            error: "Receiver is not connected.",
+            code: 405,
+          });
+          return;
         }
       } catch (error: any) {
-        socket.emit("error", { error: error.message || "Unknown error while sending message", code: 400 });
+        socket.emit("error", {
+          error: error.message || "Unknown error while sending message",
+          code: 400,
+        });
       }
-
     });
 
     socket.on("send-friend-request", async (data) => {

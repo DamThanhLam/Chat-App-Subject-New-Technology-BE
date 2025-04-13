@@ -7,13 +7,11 @@ export interface Conversation {
   createAt: string;
   updateAt: string;
   parentMessage: any;
-  messageType: "group" | "private";
 }
 
 // Hàm tạo Conversation mới
 export const createConversationModel = (
   participants: string[],
-  messageType: "group" | "private",
   groupName?: string,
   conversationId?: string
 ): Conversation => {
@@ -26,6 +24,5 @@ export const createConversationModel = (
     createAt: now,
     updateAt: now,
     parentMessage: null,
-    messageType,
   };
 };
