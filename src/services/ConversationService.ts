@@ -119,3 +119,35 @@ export const findCommonGroups = async (
     throw new Error(`Không thể tìm nhóm chung: ${error.message}`);
   }
 };
+
+export const getConversationById = async (
+  conversationId: string,
+  currentUserId: string
+): Promise<Conversation> => {
+  try {
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new Error("conversationId không hợp lệ");
+    }
+
+    if (!currentUserId || typeof currentUserId !== "string") {
+      throw new Error("currentUserId không hợp lệ");
+    }
+
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+    if (!conversation) {
+      throw new Error("Không tìm thấy cuộc trò chuyện");
+    }
+
+    if (!conversation.participants.includes(currentUserId)) {
+      throw new Error("Bạn không có quyền truy cập cuộc trò chuyện này");
+    }
+
+    return conversation;
+  } catch (error: any) {
+    throw new Error(
+      `Không thể lấy thông tin cuộc trò chuyện: ${error.message}`
+    );
+  }
+};

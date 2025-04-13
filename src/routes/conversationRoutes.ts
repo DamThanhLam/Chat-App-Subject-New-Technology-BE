@@ -108,5 +108,59 @@ router.get(
     }
   }
 );
+router.get(
+  "/:conversationId",
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const currentUserId = req.auth?.sub; // Lấy currentUserId từ auth
+      const { conversationId } = req.params; // Lấy conversationId từ params
+
+      if (!currentUserId) {
+        return res
+          .status(401)
+          .json({ error: "Không được phép: Thiếu xác thực người dùng" });
+      }
+
+      if (!conversationId) {
+        return res.status(400).json({ error: "Thiếu conversationId" });
+      }
+
+      const conversation = await conversationService.getConversationById(
+        conversationId,
+        currentUserId
+      );
+      res.json(conversation);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+),
+  router.get(
+    "/:conversationId",
+    async (req: Request & { auth?: any }, res: Response) => {
+      try {
+        const currentUserId = req.auth?.sub; // Lấy currentUserId từ auth
+        const { conversationId } = req.params; // Lấy conversationId từ params
+
+        if (!currentUserId) {
+          return res
+            .status(401)
+            .json({ error: "Không được phép: Thiếu xác thực người dùng" });
+        }
+
+        if (!conversationId) {
+          return res.status(400).json({ error: "Thiếu conversationId" });
+        }
+
+        const conversation = await conversationService.getConversationById(
+          conversationId,
+          currentUserId
+        );
+        res.json(conversation);
+      } catch (error: any) {
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
 
 export default router;
