@@ -13,7 +13,6 @@ import { groupRoutes } from "./routes/groupRoutes";
 import { userRoutes } from "./routes/userRoutes";
 import nicknameRoutes from "./routes/nickNamRoutes";
 import conversationRoutes from "./routes/conversationRoutes";
-import { messageRoute } from "./routes/messageRoute";
 import { expressjwt } from "express-jwt";
 import { authenticateJWT } from "./middelwares/authenticateJWT";
 import { messageRoute } from "./routes/messageRoute";

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 const dynamoDb = new DocumentClient();
 const TABLE_NAME = 'Friends';
 
+//Tìm bạn theo UserId
 export const getFriendsByUserId = async (userId: string) => {
   const params: DocumentClient.QueryInput = {
     TableName: TABLE_NAME,
@@ -19,32 +20,19 @@ export const getFriendsByUserId = async (userId: string) => {
   return result.Items;
 };
 
-// export const createFriend = async (senderId: string, receiverId: string, message?: string) => {
-//   const now = new Date().toISOString();
-//   const friend: Friend = {
-//     id: uuidv4(),
-//     senderId,
-//     receiverId,
-//     status: FriendStatus.PENDING,
-//     message,
-//     createdAt: now,
-//     updatedAt: now,
-//   };
 
-//   const params: DocumentClient.PutItemInput = {
-//     TableName: TABLE_NAME,
-//     Item: friend
-//   };
 
-//   await dynamoDb.put(params).promise();
-//   return friend;
-// };
 
+//Kết bạn theo email
 export const createFriend = async (senderId: string, receiverId: string, message?: string) => {
+  if (senderId === receiverId) {
+    throw new Error("Không thể gửi lời mời kết bạn tới chính mình.");
+  }
+
   const now = new Date().toISOString();
   const id = uuidv4();
 
-  // 1. Chiều A -> B
+  // Chỉ tạo bản ghi A -> B
   const friend: Friend = {
     id,
     senderId,
@@ -55,26 +43,12 @@ export const createFriend = async (senderId: string, receiverId: string, message
     updatedAt: now,
   };
 
-  // 2. Chiều B -> A (có thể dùng status riêng nếu cần)
-  const reverseFriend: Friend = {
-    id: uuidv4(),
-    senderId: receiverId,
-    receiverId: senderId,
-    status: FriendStatus.PENDING,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  // Lưu cả hai bản ghi
-  const put1 = dynamoDb.put({ TableName: TABLE_NAME, Item: friend }).promise();
-  const put2 = dynamoDb.put({ TableName: TABLE_NAME, Item: reverseFriend }).promise();
-
-  await Promise.all([put1, put2]);
+  await dynamoDb.put({ TableName: TABLE_NAME, Item: friend }).promise();
 
   return friend;
 };
 
-
+//Hiển thị danh sách lời mời kết bạn
 export const getPendingFriendRequestsByUserId = async (userId: string) => {
   const params: DocumentClient.QueryInput = {
     TableName: TABLE_NAME,
@@ -94,56 +68,12 @@ export const getPendingFriendRequestsByUserId = async (userId: string) => {
   return result.Items;
 };
 
-// export const updateFriendStatus = async (id: string, status: FriendStatus) => {
-//   const params: DocumentClient.UpdateItemInput = {
-//     TableName: TABLE_NAME,
-//     Key: { id },
-//     UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
-//     ExpressionAttributeNames: {
-//       '#status': 'status',
-//     },
-//     ExpressionAttributeValues: {
-//       ':status': status,
-//       ':updatedAt': new Date().toISOString(),
-//     },
-//     ReturnValues: 'ALL_NEW',
-//   };
-
-//   const result = await dynamoDb.update(params).promise();
-//   const updatedFriend = result.Attributes as Friend;
-
-//   // 👇 Nếu chấp nhận lời mời thì thêm chiều ngược lại
-//   if (status === FriendStatus.ACCEPTED) {
-//     await addFriendToAcceptedList(updatedFriend.receiverId, updatedFriend.senderId);
-//   }
-
-//   return updatedFriend;
-// };
-
-// export const getAcceptedFriendsByUserId = async (userId: string) => {
-//   const params: DocumentClient.QueryInput = {
-//     TableName: TABLE_NAME,
-//     IndexName: "receiverId-index",
-//     KeyConditionExpression: 'receiverId = :uid',
-//     FilterExpression: '#status = :accepted',
-//     ExpressionAttributeValues: {
-//       ':uid': userId,
-//       ':accepted': FriendStatus.ACCEPTED,
-//     },
-//     ExpressionAttributeNames: {
-//       '#status': 'status',
-//     },
-//   };
-
-//   const result = await dynamoDb.query(params).promise();
-//   return result.Items;
-// };
-
+//Thay đổi trạng thái bạn bè
 export const updateFriendStatus = async (id: string, status: FriendStatus) => {
-  // Update bản gốc theo ID
   const now = new Date().toISOString();
 
-  const originalUpdate = dynamoDb.update({
+  // Cập nhật bản ghi gốc (A -> B)
+  const updated = await dynamoDb.update({
     TableName: TABLE_NAME,
     Key: { id },
     UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
@@ -155,80 +85,43 @@ export const updateFriendStatus = async (id: string, status: FriendStatus) => {
     ReturnValues: 'ALL_NEW',
   }).promise();
 
-  // Lấy bản ghi gốc để tìm chiều ngược
-  const original = await dynamoDb.get({ TableName: TABLE_NAME, Key: { id } }).promise();
-  const friend = original.Item as Friend;
-
-  // Tìm chiều ngược: B -> A
-  const reverseQuery = await dynamoDb.query({
-    TableName: TABLE_NAME,
-    IndexName: 'senderId-index',
-    KeyConditionExpression: 'senderId = :sid',
-    FilterExpression: 'receiverId = :rid',
-    ExpressionAttributeValues: {
-      ':sid': friend.receiverId,
-      ':rid': friend.senderId
-    }
-  }).promise();
-
-  const reverseItem = reverseQuery.Items?.[0];
-  let reverseUpdate;
-
-  if (reverseItem) {
-    reverseUpdate = dynamoDb.update({
-      TableName: TABLE_NAME,
-      Key: { id: reverseItem.id },
-      UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: {
-        ':status': status,
-        ':updatedAt': now,
-      }
-    }).promise();
-  }
-
-  await Promise.all([originalUpdate, reverseUpdate]);
-
-  return (await originalUpdate).Attributes as Friend;
+  return updated.Attributes as Friend;
 };
-
 
 export const getAcceptedFriendsByUserId = async (userId: string) => {
+  const now = new Date().toISOString();
+  const status = FriendStatus.ACCEPTED;
+
   const expressionNames = { '#status': 'status' };
 
-  // 1. Truy vấn bạn bè mà user là receiver
-  const receiverParams: DocumentClient.QueryInput = {
+  const queryAcceptedFriends = (indexName: string, keyName: 'senderId' | 'receiverId') => ({
     TableName: TABLE_NAME,
-    IndexName: "receiverId-index",
-    KeyConditionExpression: 'receiverId = :uid',
+    IndexName: indexName,
+    KeyConditionExpression: `${keyName} = :uid`,
     FilterExpression: '#status = :accepted',
     ExpressionAttributeNames: expressionNames,
     ExpressionAttributeValues: {
       ':uid': userId,
-      ':accepted': FriendStatus.ACCEPTED,
+      ':accepted': status,
     },
-  };
+  });
 
-  // 2. Truy vấn bạn bè mà user là sender
-  const senderParams: DocumentClient.QueryInput = {
-    TableName: TABLE_NAME,
-    IndexName: "senderId-index", // 👉 bạn cần tạo thêm GSI này
-    KeyConditionExpression: 'senderId = :uid',
-    FilterExpression: '#status = :accepted',
-    ExpressionAttributeNames: expressionNames,
-    ExpressionAttributeValues: {
-      ':uid': userId,
-      ':accepted': FriendStatus.ACCEPTED,
-    },
-  };
-
-  const [receiverResult, senderResult] = await Promise.all([
-    dynamoDb.query(receiverParams).promise(),
-    dynamoDb.query(senderParams).promise()
+  const [received, sent] = await Promise.all([
+    dynamoDb.query(queryAcceptedFriends("receiverId-index", "receiverId")).promise(),
+    dynamoDb.query(queryAcceptedFriends("senderId-index", "senderId")).promise(),
   ]);
 
-  return [...(receiverResult.Items || []), ...(senderResult.Items || [])];
+  const all = [...(received.Items || []), ...(sent.Items || [])];
+
+  // Chuẩn hóa: luôn trả về friendId là người còn lại
+  const normalized = all.map((item) => ({
+    ...item,
+    friendId: item.senderId === userId ? item.receiverId : item.senderId
+  }));
+
+  return normalized;
 };
+
 
 
 export const addFriendToAcceptedList = async (userId: string, friendId: string) => {

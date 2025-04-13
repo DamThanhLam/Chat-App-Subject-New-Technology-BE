@@ -10,13 +10,13 @@ interface AuthRequest extends Request {
 const router = Router();
 const userService = new UserService();
 
-router.put("/", async  (req: Request & { auth?: any }, res: Response) => { 
+router.put("/", async (req: Request & { auth?: any }, res: Response) => {
   const userId = req.auth?.sub;
 
   const data = req.body;
 
   try {
-    const updatedUser = await userService.updateUserInfo(userId, data);  
+    const updatedUser = await userService.updateUserInfo(userId, data);
 
     console.log("Updated user before response:", updatedUser);
 
@@ -32,7 +32,7 @@ router.put("/", async  (req: Request & { auth?: any }, res: Response) => {
 
 router.get("/search", async (req, res) => {
   const { email } = req.query;
-  console.log("Searching for email:", email); 
+  console.log("Searching for email:", email);
 
   if (!email || typeof email !== "string") {
     return res.status(400).json({ message: "Invalid email query" });
@@ -53,37 +53,15 @@ router.get("/search", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+
+router.get("/", async (req: Request & { auth?: any }, res: Response) => {
   try {
-    const user = await userService.getUserById(req.params.id); 
+    const userId = req.auth?.sub;
+    const user = await userService.getUserById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json(user);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
-  }
-});
-/**
- * POST /api/user/:id/avatar
- * Upload avatar
- */
-router.post("/avatar", upload_file.single("image"), async (req: Request & { auth?: any }, res: Response) => {
-  const file = req.file;
-
-  if (!file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-
-  // Ví dụ tạo URL giả định từ server local
-  const avatar = await S3Service.post(file);
-
-  try {
-    // const updatedUser = await userService.updateUserInfo(id, { avatarUrl });
-    res.json({
-      message: "Avatar updated successfully",
-      avatar: avatar,
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
   }
 });
 
@@ -121,5 +99,37 @@ router.get("/friends", async (req: AuthRequest, res) => {
   }
 });
 
+router.get("/:id", async (req, res) => {
+  try {
+    const user = await userService.getUserById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+/**
+ * POST /api/user/:id/avatar
+ * Upload avatar
+ */
+router.post("/avatar", upload_file.single("image"), async (req: Request & { auth?: any }, res: Response) => {
+  const file = req.file;
 
+  if (!file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+
+  // Ví dụ tạo URL giả định từ server local
+  const avatar = await S3Service.post(file);
+
+  try {
+    // const updatedUser = await userService.updateUserInfo(id, { avatarUrl });
+    res.json({
+      message: "Avatar updated successfully",
+      avatar: avatar,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 export { router as userRoutes };

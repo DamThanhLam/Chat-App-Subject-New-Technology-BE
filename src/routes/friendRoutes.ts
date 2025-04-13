@@ -47,7 +47,7 @@ router.post("/add", async (req: Request, res: Response) => {
 });
 
 
-router.get("/requests/:userId", authenticateJWT , async (req: Request, res: Response) => {
+router.get("/requests/:userId", authenticateJWT, async (req: Request, res: Response) => {
   const { userId } = req.params;
 
   try {
@@ -95,7 +95,21 @@ router.delete("/cancel/:id", authenticateJWT, async (req: Request, res: Response
     return res.status(500).json({ message: "Failed to cancel friend request" });
   }
 });
+router.get("/", async (req: Request & { auth?: any }, res: Response) => {
+  const userId = req.auth?.sub;
 
+  if (!userId) {
+    return res.status(401).json({ message: "Invalid or missing token" });
+  }
+
+  try {
+    const friends = await FriendService.getFriendListAccept(userId);
+    res.status(200).json({ friends });
+  } catch (error) {
+    console.error("Error fetching friends:", error);
+    res.status(500).json({ message: "Failed to get friends" });
+  }
+});
 
 export { router as friendRoutes };
 
