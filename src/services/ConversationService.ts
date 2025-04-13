@@ -151,3 +151,22 @@ export const getConversationById = async (
     );
   }
 };
+
+export const getConversationsByUserId = async (
+  userId: string
+): Promise<Conversation[]> => {
+  try {
+    if (!userId || typeof userId !== "string") {
+      throw new Error("userId không hợp lệ");
+    }
+
+    const conversations = await conversationRepository.getConversationsByUserId(
+      userId
+    );
+    return conversations;
+  } catch (error: any) {
+    throw new Error(
+      `Không thể lấy danh sách cuộc trò chuyện: ${error.message}`
+    );
+  }
+};

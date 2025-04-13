@@ -3,6 +3,7 @@ import {
   PutCommand,
   GetCommand,
   UpdateCommand,
+  ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { Conversation, createConversationModel } from "../models/Conversation";
@@ -88,4 +89,19 @@ export const findCommonGroups = async (
     },
   };
   return paginateScan<Conversation>(docClient, params, page, limit);
+};
+
+export const getConversationsByUserId = async (
+  userId: string
+): Promise<Conversation[]> => {
+  const command = new ScanCommand({
+    TableName: TABLE_NAME,
+    FilterExpression: "contains(participants, :userId)",
+    ExpressionAttributeValues: {
+      ":userId": userId,
+    },
+  });
+
+  const result = await docClient.send(command);
+  return (result.Items as Conversation[]) || [];
 };

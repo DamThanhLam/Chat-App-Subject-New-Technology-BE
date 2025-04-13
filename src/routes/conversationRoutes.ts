@@ -163,4 +163,22 @@ router.get(
     }
   );
 
+router.get("/", async (req: Request & { auth?: any }, res: Response) => {
+  try {
+    const currentUserId = req.auth?.sub;
+
+    if (!currentUserId) {
+      return res
+        .status(401)
+        .json({ error: "Không được phép: Thiếu xác thực người dùng" });
+    }
+
+    const conversations = await conversationService.getConversationsByUserId(
+      currentUserId
+    );
+    res.json(conversations);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 export default router;
