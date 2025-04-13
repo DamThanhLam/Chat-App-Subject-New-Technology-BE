@@ -19,16 +19,15 @@ router.post("/send-request", async (req: Request, res: Response) => {
 });
 
 router.get("/list/:userId", async (req: Request, res: Response) => {
-    try {
-      const { userId } = req.params;
-      const friends = await friendService.getFriendRequests(userId);
-      res.json(friends);
-    } catch (error) {
-      console.error("Error fetching friend requests:", error);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  });
-  
+  try {
+    const { userId } = req.params;
+    const friends = await friendService.getFriendRequests(userId);
+    res.json(friends);
+  } catch (error) {
+    console.error("Error fetching friend requests:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 router.post("/accept/:id", async (req: Request, res: Response) => {
   try {
@@ -63,6 +62,23 @@ router.delete("/remove/:id", async (req: Request, res: Response) => {
     res.json({ message: "Friend removed" });
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.get("/", async (req: Request & { auth?: any }, res: Response) => {
+  try {
+    const userId = req.auth?.sub;
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ error: "Unauthorized: Missing user authentication" });
+    }
+
+    const result = await friendService.getFriends(userId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

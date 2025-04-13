@@ -4,12 +4,16 @@ import { v4 as uuidv4 } from "uuid";
 export class FriendService {
   private friendRepository = new FriendRepository();
 
-  async sendFriendRequest(senderId: string, receiverId: string, message?: string) {
+  async sendFriendRequest(
+    senderId: string,
+    receiverId: string,
+    message?: string
+  ) {
     const friendRequest = {
       id: uuidv4(),
       senderId,
       receiverId,
-      senderAVT: "", 
+      senderAVT: "",
       message: message || "",
       status: "pending",
       createAt: new Date().toISOString(),
@@ -25,7 +29,6 @@ export class FriendService {
   async getFriendRequests(userId: string) {
     return await this.friendRepository.getFriendRequests(userId);
   }
-  
 
   async acceptFriendRequest(id: string) {
     return await this.friendRepository.updateFriendStatus(id, "accepted");
@@ -41,5 +44,18 @@ export class FriendService {
 
   async deleteFriendRequest(id: string) {
     return await this.friendRepository.deleteFriendRequest(id);
+  }
+
+  async getFriends(userId: string) {
+    try {
+      if (!userId) {
+        throw new Error("Missing userId");
+      }
+
+      const friends = await this.friendRepository.getFriends(userId);
+      return { friends };
+    } catch (error: any) {
+      throw new Error(`Failed to get friends: ${error.message}`);
+    }
   }
 }

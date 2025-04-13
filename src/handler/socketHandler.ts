@@ -10,7 +10,6 @@ const messageService = new MessageService();
 export function socketHandler(io: Server) {
   io.use(socketAuthMiddleware);
   io.on("connection", (socket: Socket) => {
-
     socket.on("join", () => {
       const user = (socket as any).user;
       if (!user) {
@@ -19,8 +18,8 @@ export function socketHandler(io: Server) {
       }
 
       users[user.sub] = socket.id;
-      console.log("users")
-      console.log(users)
+      console.log("users");
+      console.log(users);
     });
 
     // handleChat(socket, io);
@@ -29,34 +28,37 @@ export function socketHandler(io: Server) {
     //   io.emit("group-message", { user: users[socket.id], message });
     // });
 
-
     socket.on("private-message", (message: Message) => {
       const user = (socket as any).user;
 
       const receiverSocketId = users[message.receiverId];
 
       message.senderId = user.sub;
-      message.updateAt = message.creatAt = new Date().toISOString();
+      message.updatedAt = message.createdAt = new Date().toISOString();
 
       try {
-        messageService.post(message)
+        messageService.post(message);
         // Nếu tìm được người nhận thì gửi tin nhắn
         if (receiverSocketId) {
           io.to(receiverSocketId).emit("private-message", {
             message,
           });
           socket.emit("result", { code: 200, message: "send message success" });
-          return
+          return;
         } else {
-          socket.emit("error", { error: "Receiver is not connected.", code: 405 });
-          return
+          socket.emit("error", {
+            error: "Receiver is not connected.",
+            code: 405,
+          });
+          return;
         }
       } catch (error: any) {
-        socket.emit("error", { error: error.message || "Unknown error while sending message", code: 400 });
+        socket.emit("error", {
+          error: error.message || "Unknown error while sending message",
+          code: 400,
+        });
       }
-
     });
-
 
     socket.on("disconnect", () => {
       console.log(`${users[socket.id]} disconnected.`);

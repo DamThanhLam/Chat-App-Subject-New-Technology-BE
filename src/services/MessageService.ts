@@ -1,9 +1,11 @@
 import S3Service from "../aws_service/s3.service";
 import { Message } from "../models/Message";
 import { MessageRepository } from "../repository/MessageRepository";
-const messageRepository = new MessageRepository();
+
 import { Conversation } from "../models/Conversation";
 import { getConversation } from "../repository/ConversationRepository";
+
+const messageRepository = new MessageRepository();
 export default class MessageService {
   async post(message: Message) {
     // Kiểm tra receiverId
@@ -72,12 +74,12 @@ export default class MessageService {
     }
 
     // Gán thời gian nếu chưa có
-    if (!message.creatAt) {
-      message.creatAt = new Date().toISOString();
+    if (!message.createdAt) {
+      message.createdAt = new Date().toISOString();
     }
 
-    if (!message.updateAt) {
-      message.updateAt = message.creatAt;
+    if (!message.updatedAt) {
+      message.updatedAt = message.createdAt;
     }
     if (message.contentType === "file") {
       const file: any = message.message;
@@ -88,6 +90,23 @@ export default class MessageService {
       message.message = urlFile;
     }
     return messageRepository.post(message);
+  }
+  async getByReceiverId(
+    userId: string,
+    friendId: string,
+    exclusiveStartKey: string
+  ): Promise<Message[] | null> {
+    return await messageRepository.getMessagesByFriendId(
+      userId,
+      friendId,
+      exclusiveStartKey
+    );
+  }
+  async getLatestMessage(
+    userId: string,
+    friendId: string
+  ): Promise<Message | null> {
+    return await messageRepository.getLatestMessage(userId, friendId);
   }
 
   async searchMessages(

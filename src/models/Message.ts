@@ -3,8 +3,8 @@ export interface Message {
   conversationId: string | null;
   senderId: string;
   message: string | FileMessage;
-  creatAt: string; // ISO string, nếu dùng `Date` thì phải convert từ backend
-  updateAt: string;
+  createdAt: string; // ISO string, nếu dùng `Date` thì phải convert từ backend
+  updatedAt: string;
   parentMessage?: Message; // optional để tránh vòng lặp vô hạn
   readed: string[]; // Danh sách userId đã đọc
   messageType: "group" | "private";
