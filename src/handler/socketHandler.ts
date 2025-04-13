@@ -32,7 +32,7 @@ export function socketHandler(io: Server) {
     // });
 
 
-    socket.on("private-message", (raw: string | object) => {
+    socket.on("private-message", async(raw: string | object) => {
       let message: Message;
 
       if (typeof raw === "string") {
@@ -49,21 +49,20 @@ export function socketHandler(io: Server) {
       const user = (socket as any).user;
       message.senderId = user.sub;
       const receiverSocketId = users[message.receiverId];
+
+      message.status=receiverSocketId ? "received": "sended"
       try {
-        messageService.post(message);
+        const messageResult = await messageService.post(message)
         // Nếu tìm được người nhận thì gửi tin nhắn
         if (receiverSocketId) {
           io.to(receiverSocketId).emit("private-message", {
             message,
           });
-          socket.emit("result", { code: 200, message: "send message success" });
-          return;
+          socket.emit("result", { code: 200, message: messageResult});
+          return
         } else {
-          socket.emit("error", {
-            error: "Receiver is not connected.",
-            code: 405,
-          });
-          return;
+          socket.emit("result", { message: messageResult, code: 405 });
+          return
         }
       } catch (error: any) {
         socket.emit("error", {
@@ -233,8 +232,37 @@ export function socketHandler(io: Server) {
         });
       }
     });
-    
 
+    socket.on("recall-message",async(messageId:string)=>{
+      const user = (socket as any).user;
+      const message = await messageService.getById(messageId)
+      if(message){
+        message.status = "recalled"
+        message.message="message recalled";
+        messageService.update(message)
+        const receiverSocketId = users[message.receiverId];
+        receiverSocketId && io.to(receiverSocketId).emit("recall-message", {
+          message: message
+        })
+        return
+      }
+      socket.emit("error", { error: "Message not found to be recalled", code: 400 });
+    })
+    socket.on("delete-message",async(messageId:string)=>{
+      const user = (socket as any).user;
+      const message = await messageService.getById(messageId)
+      if(message){
+        message.status = "deleted"
+        message.message="message deleted";
+        messageService.update(message)
+        const receiverSocketId = users[message.receiverId];
+        receiverSocketId && io.to(receiverSocketId).emit("delete-message", {
+          messageId: messageId
+        })
+        return
+      }
+      socket.emit("error", { error: "Message not found to be recalled", code: 400 });
+    })
     socket.on("disconnect", () => {
       console.log(`${users[socket.id]} disconnected.`);
       const user = (socket as any).user;

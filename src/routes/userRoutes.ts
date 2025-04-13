@@ -66,8 +66,7 @@ router.get("/:id", async (req, res) => {
  * POST /api/user/:id/avatar
  * Upload avatar
  */
-router.post("/:id/avatar", upload_file.single("image"), async (req, res) => {
-  const id = req.params.id;
+router.post("/avatar", upload_file.single("image"), async (req: Request & { auth?: any }, res: Response) => {
   const file = req.file;
 
   if (!file) {

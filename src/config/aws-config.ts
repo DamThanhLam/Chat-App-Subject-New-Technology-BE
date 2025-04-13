@@ -5,7 +5,7 @@ dotenv.config();
 console.log(process.env.AWS_ACCESS_KEY_ID);
 // Đảm bảo các biến env không bị undefined
 const awsConfig: DynamoDBClientConfig & S3ClientConfig = {
-  region: process.env.AWS_REGION_DB || "us-east-1", // Giá trị mặc định nếu không có
+  region: process.env.AWS_REGION_DB || "ap-southeast-1", // Giá trị mặc định nếu không có
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",

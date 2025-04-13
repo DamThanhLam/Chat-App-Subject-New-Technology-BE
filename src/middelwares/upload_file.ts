@@ -20,4 +20,12 @@ const upload_file = multer({
     }
 });
 
+export const upload_file_message = multer({
+    storage: storage,
+    limits: { fieldNameSize: 1024 * 1024 * 20 },
+    fileFilter: (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+        return cb(null, true);
+    }
+});
+
 export default upload_file;

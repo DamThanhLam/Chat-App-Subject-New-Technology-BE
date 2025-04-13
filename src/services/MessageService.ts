@@ -1,7 +1,9 @@
+import path from "path";
+import fs from "fs";
+import FileType from "file-type";
 import S3Service from "../aws_service/s3.service";
-import { Message } from "../models/Message";
+import { FileMessage, Message } from "../models/Message";
 import { MessageRepository } from "../repository/MessageRepository";
-
 import { Conversation } from "../models/Conversation";
 import { getConversation } from "../repository/ConversationRepository";
 
@@ -33,81 +35,32 @@ export default class MessageService {
         }
         break;
 
-      case "file":
-        const file = message.message;
+            case "file":
 
-        if (
-          typeof file !== "object" ||
-          !file.data ||
-          !file.filename ||
-          !file.mimetype ||
-          typeof file.size !== "number"
-        ) {
-          throw new Error(
-            "File message must contain data, filename, mimetype, and size."
-          );
-        }
-
-        // Kiểm tra kiểu file hợp lệ
-        const allowedMimeTypes = [
-          "image/jpeg",
-          "image/png",
-          "image/gif",
-          "video/mp4",
-          "video/quicktime",
-        ];
-        if (!allowedMimeTypes.includes(file.mimetype)) {
-          throw new Error(
-            "Unsupported file type. Only image/video files are allowed."
-          );
-        }
-
-        // Kiểm tra dung lượng tối đa (ví dụ 10MB)
-        const MAX_FILE_SIZE = 20 * 1024 * 1024; // 10MB
-        if (file.size > MAX_FILE_SIZE) {
-          throw new Error("File size exceeds the 20MB limit.");
-        }
-        break;
+                break;
 
       default:
         throw new Error("Invalid content type.");
     }
 
-    // Gán thời gian nếu chưa có
-    if (!message.createdAt) {
-      message.createdAt = new Date().toISOString();
-    }
+        // Gán thời gian nếu chưa có
+        message.createdAt = new Date().toISOString();
+        message.updatedAt = message.createdAt;
+        return messageRepository.post(message)
 
-    if (!message.updatedAt) {
-      message.updatedAt = message.createdAt;
     }
-    if (message.contentType === "file") {
-      const file: any = message.message;
-      const urlFile = await S3Service.post({
-        buffer: file.data,
-        originalname: file.filename,
-      });
-      message.message = urlFile;
+    async getByReceiverId(userId: string, friendId: string, exclusiveStartKey: string): Promise<Message[] | null> {
+        return await messageRepository.getMessagesByFriendId(userId, friendId, exclusiveStartKey);
     }
-    return messageRepository.post(message);
-  }
-  async getByReceiverId(
-    userId: string,
-    friendId: string,
-    exclusiveStartKey: string
-  ): Promise<Message[] | null> {
-    return await messageRepository.getMessagesByFriendId(
-      userId,
-      friendId,
-      exclusiveStartKey
-    );
-  }
-  async getLatestMessage(
-    userId: string,
-    friendId: string
-  ): Promise<Message | null> {
-    return await messageRepository.getLatestMessage(userId, friendId);
-  }
+    async getLatestMessage(userId: string, friendId: string): Promise<Message | null> {
+        return await messageRepository.getLatestMessage(userId, friendId);
+    }
+    async getById(messageId: string): Promise<Message | null> {
+        return await messageRepository.getById(messageId)
+    }
+    async update(message: Message) {
+        await messageRepository.update(message)
+    }
 
   async searchMessages(
     userId: string,
