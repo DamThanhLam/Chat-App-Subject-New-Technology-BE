@@ -4,7 +4,9 @@ import { socketAuthMiddleware } from "../middelwares/authenticateJWT";
 import { Message } from "../models/Message";
 import upload_file from "../middelwares/upload_file";
 import MessageService from "../services/MessageService";
+import * as FriendService from '../services/FriendService';
 import axios from "axios";
+import { declineFriendRequestById } from "../repository/FriendRepository";
 
 const users: Record<string, string> = {};
 const messageService = new MessageService();
@@ -78,15 +80,15 @@ export function socketHandler(io: Server) {
         return;
       }
     
-      console.log("📥 Gửi lời mời kết bạn từ:", user.sub);
-      console.log("📥 Gửi lời mời đến:", data.receiverId);
+      console.log("Gửi lời mời kết bạn từ:", user.sub);
+      console.log("Gửi lời mời đến:", data.receiverId);
     
       try {
-        // 🛠 GỌI API /api/friends/add để lưu lời mời vào DB
+        //GỌI API /api/friends/add để lưu lời mời vào DB
         const response = await axios.post(
           "http://localhost:3000/api/friends/add",
           {
-            senderId: user.sub, // 👈 thêm dòng này
+            senderId: user.sub, 
             receiverId: data.receiverId,
             message: data.message || "",
           },
@@ -97,27 +99,27 @@ export function socketHandler(io: Server) {
           }
         );        
     
-        console.log("✅ Đã lưu lời mời kết bạn:", response.data);
+        console.log("Đã lưu lời mời kết bạn:", response.data);
     
         // Gửi socket event tới người nhận
         const receiverSocketId = users[data.receiverId];
-        io.to(receiverSocketId || "").emit("new-friend-request", {
-          fromUser: {
-            id: user.sub,
-            name: user.name,
-            avatar: user.avatar || null,
-          },
+        io.to(receiverSocketId || "").emit("newFriendRequest", {
+          id: response.data.id, // ID của lời mời
+          senderId: user.sub,
+          name: user.name,
+          avatarUrl: user.avatar || "https://cdn-icons-png.flaticon.com/512/219/219983.png",
+          createdAt: new Date().toISOString(),
         });
     
         // Gửi phản hồi cho người gửi
         socket.emit("send-friend-request-response", {
           code: 200,
-          message: "✅ Yêu cầu kết bạn đã được gửi",
+          message: "Yêu cầu kết bạn đã được gửi",
           data: response.data, // hoặc senderId/receiverId
         });
     
       } catch (error: any) {
-        console.error("❌ Không thể lưu lời mời kết bạn:", error?.response?.data || error.message);
+        console.error("Không thể lưu lời mời kết bạn:", error?.response?.data || error.message);
     
         socket.emit("send-friend-request-response", {
           code: 500,
@@ -128,17 +130,11 @@ export function socketHandler(io: Server) {
     });
     
     
-    
-    
-
     socket.on("acceptFriendRequest", async (data) => {
-      console.log("📨 Nhận acceptFriendRequest:", data);  // Debug data
-    
       const { friendRequestId } = data;
       const token = socket.handshake.auth.token;
     
       if (!friendRequestId || !token) {
-        console.log("❌ Thiếu friendRequestId hoặc token");
         socket.emit("acceptFriendRequestResponse", {
           code: 400,
           error: "Thiếu friendRequestId hoặc token",
@@ -147,73 +143,92 @@ export function socketHandler(io: Server) {
       }
     
       try {
-        // Gọi API chấp nhận lời mời
-        const response = await axios.post(
-          `http://localhost:3000/api/friends/accept/${friendRequestId}`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        // Chấp nhận lời mời kết bạn
+        const updatedRequest = await FriendService.acceptFriendRequest(friendRequestId);
     
-        console.log("✅ Đã chấp nhận lời mời:", response.data);
+        // Thông báo cho cả hai người
+        const senderSocketId = users[updatedRequest.senderId];
+        const receiverSocketId = users[updatedRequest.receiverId];
+    
+        // Thông báo cho người nhận về việc chấp nhận lời mời
+        if (senderSocketId) {
+          io.to(senderSocketId).emit("friendRequestAccepted", {
+            fromUserId: updatedRequest.receiverId,
+          });
+        }
+    
+        // Thông báo cho người gửi về việc chấp nhận
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("friendRequestAccepted", {
+            fromUserId: updatedRequest.senderId,
+          });
+        }
+    
         socket.emit("acceptFriendRequestResponse", {
           code: 200,
           message: "Đã chấp nhận lời mời",
-          data: response.data,
+          data: updatedRequest,
         });
-    
-        // Gửi thông báo cho người gửi
-        const senderSocketId = users[response.data.senderId];
-        if (senderSocketId) {
-          io.to(senderSocketId).emit("friendRequestAccepted", {
-            fromUserId: response.data.receiverId,
-          });
-        }
       } catch (err: any) {
-        console.error("❌ Không thể chấp nhận lời mời:", err?.response?.data || err.message);
+        console.error("Không thể chấp nhận lời mời:", err);
         socket.emit("acceptFriendRequestResponse", {
           code: 500,
           error: "Không thể chấp nhận lời mời",
-          detail: err?.response?.data || err.message,
+          detail: err.message,
         });
       }
     });
-    
     
     
 
     // Lắng nghe sự kiện "decline-friend-request"
-    socket.on("decline-friend-request", (data: any) => {
-      const user = (socket as any).user;
-
-      if (!user) {
-        console.warn("User not authenticated properly");
+    socket.on("declineFriendRequest", async (data) => {
+      const { friendRequestId } = data;
+      const token = socket.handshake.auth.token;
+    
+      if (!friendRequestId || !token) {
+        socket.emit("declineFriendRequestResponse", {
+          code: 400,
+          error: "Thiếu friendRequestId hoặc token",
+        });
         return;
       }
-
-      const receiverSocketId = users[data.receiverId];
-      
-      if (!receiverSocketId) {
-        socket.emit("error", { error: "Receiver is not online", code: 404 });
-        return;
+    
+      try {
+        // Hủy lời mời kết bạn
+        const cancelledRequest = await FriendService.cancelFriendRequest(friendRequestId);
+    
+        // Kiểm tra nếu cancelledRequest trả về null, nghĩa là không tìm thấy yêu cầu kết bạn
+        if (!cancelledRequest) {
+          socket.emit("declineFriendRequestResponse", {
+            code: 404,
+            error: "Không tìm thấy lời mời kết bạn",
+          });
+          return;
+        }
+    
+        // Thông báo cho người gửi về việc từ chối lời mời
+        const senderSocketId = users[cancelledRequest.senderId];
+        if (senderSocketId) {
+          io.to(senderSocketId).emit("friendRequestDeclined", {
+            fromUserId: cancelledRequest.receiverId,
+          });
+        }
+    
+        socket.emit("declineFriendRequestResponse", {
+          code: 200,
+          message: "Lời mời kết bạn đã bị từ chối",
+          data: cancelledRequest,
+        });
+      } catch (err: any) {
+        console.error("Không thể từ chối lời mời:", err);
+        socket.emit("declineFriendRequestResponse", {
+          code: 500,
+          error: "Không thể từ chối lời mời",
+          detail: err.message,
+        });
       }
-
-      // Gửi sự kiện từ chối kết bạn cho người gửi
-      io.to(receiverSocketId).emit("friend-request-declined", {
-        by: user.sub,
-      });
-
-      // Gửi phản hồi cho người từ chối yêu cầu
-      socket.emit("decline-friend-request-response", {
-        code: 200,
-        message: "You have declined the friend request.",
-      });
     });
-    
-    
     
 
     socket.on("disconnect", () => {

@@ -36,11 +36,16 @@ router.post("/add", async (req: Request, res: Response) => {
   try {
     const friend = await FriendService.addFriend(senderId, receiverId, message);
     return res.status(201).json(friend);
-  } catch (error) {
-    console.error("Error creating friend:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "Đã là bạn bè, không thể gửi lời mời kết bạn") {
+      return res.status(400).json({ message: err.message });
+    }
+    console.error("Error creating friend:", err);
     return res.status(500).json({ message: "Failed to create friend" });
   }
 });
+
 
 router.get("/requests/:userId", authenticateJWT , async (req: Request, res: Response) => {
   const { userId } = req.params;
@@ -63,6 +68,31 @@ router.post("/accept/:userId", authenticateJWT, async (req: Request, res: Respon
   } catch (error) {
     console.error("Error accepting friend request:", error);
     return res.status(500).json({ message: "Failed to accept friend request" });
+  }
+});
+
+router.post("/accept/:friendRequestId", async (req: Request, res: Response) => {
+  const { friendRequestId } = req.params;
+
+  try {
+    const updatedRequest = await FriendService.acceptFriendRequest(friendRequestId);
+    return res.status(200).json(updatedRequest);
+  } catch (error) {
+    console.error("Error accepting friend request:", error);
+    return res.status(500).json({ message: "Failed to accept friend request" });
+  }
+});
+
+
+router.delete("/cancel/:id", authenticateJWT, async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    await FriendService.cancelFriendRequest(id);
+    return res.status(200).json({ message: "Friend request cancelled" });
+  } catch (error) {
+    console.error("Error cancelling friend request:", error);
+    return res.status(500).json({ message: "Failed to cancel friend request" });
   }
 });
 
