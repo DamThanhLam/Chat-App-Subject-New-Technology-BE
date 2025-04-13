@@ -11,8 +11,6 @@ import dotenv from 'dotenv';
 import groupChatRoutes from './routes/group-chat-routes';
 import { groupRoutes } from "./routes/groupRoutes";
 import { userRoutes } from "./routes/userRoutes";
-import nicknameRoutes from "./routes/nickNamRoutes";
-import conversationRoutes from "./routes/conversationRoutes";
 import { expressjwt } from "express-jwt";
 import { authenticateJWT } from "./middelwares/authenticateJWT";
 import { messageRoute } from "./routes/messageRoute";
@@ -38,13 +36,12 @@ app.use(express.json());
 // app.use(express.static(path.join(__dirname, "views")));
 
 // Routes
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "views/ui-home.html"));
-});
-app.use(registerRoutes);
-app.use(loginRoutes);
-app.use("/api/friends", friendRoutes);
-
+// app.get("/", (req, res) => {
+//   res.sendFile(path.join(__dirname, "views/ui-home.html"));
+// });
+// app.use(registerRoutes);
+// app.use(loginRoutes);
+// app.use("/api/friends", friendRoutes);
 // app.use('/api/group-chat', groupChatRoutes);
 // app.use('/api',groupRoutes)
 app.use((req, res, next) => {
@@ -59,9 +56,8 @@ app.use((req, res, next) => {
 
   next();
 });
-app.use("/api/user", authenticateJWT, userRoutes);
-app.use("/api/nickname", authenticateJWT, nicknameRoutes);
-app.use("/api/conversation", authenticateJWT, conversationRoutes);
+app.use('/api/user', authenticateJWT, userRoutes)
+app.use('/api/message', authenticateJWT, messageRoute)
 // Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {

@@ -42,7 +42,7 @@ export class MessageRepository {
         // 👇 Giải mã và sắp xếp theo createdAt giảm dần (mới nhất trước)
         const messages = (response.Items ?? [])
             .map((item) => unmarshall(item) as Message)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .sort((a, b) => new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime() )
             .slice(0, 20); // lấy 20 bản ghi đầu tiên sau khi sort
         return messages
     }

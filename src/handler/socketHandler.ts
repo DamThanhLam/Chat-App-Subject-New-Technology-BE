@@ -30,7 +30,7 @@ export function socketHandler(io: Server) {
     // });
 
 
-    socket.on("private-message", (raw: string | object) => {
+    socket.on("private-message", async(raw: string | object) => {
       let message: Message;
 
       if (typeof raw === "string") {
@@ -50,16 +50,16 @@ export function socketHandler(io: Server) {
 
       message.status=receiverSocketId ? "received": "sended"
       try {
-        messageService.post(message)
+        const messageResult = await messageService.post(message)
         // Nếu tìm được người nhận thì gửi tin nhắn
         if (receiverSocketId) {
           io.to(receiverSocketId).emit("private-message", {
             message,
           });
-          socket.emit("result", { code: 200, message: "send message success" });
+          socket.emit("result", { code: 200, message: messageResult});
           return
         } else {
-          socket.emit("error", { error: "Receiver is not connected.", code: 405 });
+          socket.emit("result", { message: messageResult, code: 405 });
           return
         }
       } catch (error: any) {
