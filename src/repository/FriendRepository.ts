@@ -236,3 +236,46 @@ export const declineFriendRequestById = async (id: string) => {
   // Trả về friend đã bị hủy
   return friend;
 };
+
+
+export const cancelFriendRequestA = async (senderId: string, receiverId: string) => {
+  const result = await dynamoDb.query({
+    TableName: TABLE_NAME,
+    IndexName: "senderId-index",
+    KeyConditionExpression: "senderId = :sid",
+    FilterExpression: "receiverId = :rid",
+    ExpressionAttributeValues: {
+      ":sid": senderId,
+      ":rid": receiverId,
+    },
+  }).promise();
+
+  const item = result.Items?.[0];
+  if (!item) throw new Error("Friend request not found");
+
+  await declineFriendRequestById(item.id);
+};
+
+export const isPendingFriendRequest = async (
+  senderId: string,
+  receiverId: string
+): Promise<boolean> => {
+  const params: DocumentClient.ScanInput = {
+    TableName: TABLE_NAME,
+    FilterExpression:
+      '((senderId = :senderId AND receiverId = :receiverId) OR (senderId = :receiverId AND receiverId = :senderId)) AND #status = :pending',
+    ExpressionAttributeValues: {
+      ':senderId': senderId,
+      ':receiverId': receiverId,
+      ':pending': FriendStatus.PENDING,
+    },
+    ExpressionAttributeNames: {
+      '#status': 'status',
+    },
+  };
+
+  const result = await dynamoDb.scan(params).promise();
+  const items = result.Items ?? []; // fallback nếu Items là undefined
+
+  return items.length > 0;
+};
