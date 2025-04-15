@@ -1,8 +1,8 @@
 import { FriendStatus } from '../models/Friend';
-import { addFriendToAcceptedList, createFriend, declineFriendRequestById, getAcceptedFriendsByUserId, getFriendsByUserId, getPendingFriendRequestsByUserId, isAlreadyFriends, updateFriendStatus } from '../repository/FriendRepository';
+import { addFriendToAcceptedList, cancelFriendRequestA, createFriend, declineFriendRequestById, getAcceptedFriendsByUserId, getFriendsByUserId, getPendingFriendRequestsByUserId, isAlreadyFriends, isPendingFriendRequest, updateFriendStatus } from '../repository/FriendRepository';
 
 export const getFriendList = async (userId: string) => {
-  const friends = await getFriendsByUserId(userId);
+  const friends = await getAcceptedFriendsByUserId(userId);
   return friends || [];
 };
 
@@ -37,6 +37,14 @@ export const acceptFriendRequest = async (id: string) => {
 
 export const cancelFriendRequest = async (id: string) => {
   return await declineFriendRequestById(id);
+};
+
+export const cancelFriendRequestListFriend = async (senderId: string, receiverId: string) => {
+  return await cancelFriendRequestA(senderId, receiverId);
+};
+
+export const checkPendingRequest = async (senderId: string, receiverId: string): Promise<boolean> => {
+  return await isPendingFriendRequest(senderId, receiverId);
 };
 
 export const getFriendListAccept = async (userId: string) => {

@@ -118,7 +118,7 @@ export class UserRepository {
   async findUsersByEmail(email: string): Promise<User[]> {
     const params = new ScanCommand({
       TableName: TABLE_NAME,
-      FilterExpression: "contains(email, :email)",
+      FilterExpression: "email = :email", // so sánh tuyệt đối
       ExpressionAttributeValues: {
         ":email": email
       }
@@ -126,16 +126,17 @@ export class UserRepository {
   
     try {
       const result = await docClient.send(params);
-      console.log("Scan result:", result); // Debug thông tin trả về
+      console.log("Scan result:", result);
       return result.Items?.map(user => ({
         ...user,
         createdAt: new Date(user.createdAt),
         updatedAt: new Date(user.updatedAt)
       })) as User[] || [];
     } catch (error) {
-      console.error("Error querying DynamoDB:", error); // Debug lỗi query
+      console.error("Error querying DynamoDB:", error);
       throw new Error("Error querying DynamoDB");
     }
   }
+  
   
 }

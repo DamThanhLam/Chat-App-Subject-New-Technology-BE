@@ -95,6 +95,40 @@ router.delete("/cancel/:id", authenticateJWT, async (req: Request, res: Response
     return res.status(500).json({ message: "Failed to cancel friend request" });
   }
 });
+
+router.delete("/cancel", authenticateJWT, async (req: Request, res: Response) => {
+  const { senderId, receiverId } = req.query;
+
+  if (!senderId || !receiverId) {
+    return res.status(400).json({ message: "Missing senderId or receiverId" });
+  }
+
+  try {
+    await FriendService.cancelFriendRequestListFriend(senderId as string, receiverId as string);
+    return res.status(200).json({ message: "Friend request cancelled" });
+  } catch (error) {
+    console.error("Error cancelling friend request:", error);
+    return res.status(500).json({ message: "Failed to cancel friend request" });
+  }
+});
+
+// API endpoint để kiểm tra trạng thái lời mời kết bạn (pending)
+router.get('/check-pending-request', async (req: Request, res: Response) => {
+  const { senderId, receiverId } = req.query;
+
+  if (!senderId || !receiverId) {
+    return res.status(400).json({ message: "senderId và receiverId là bắt buộc." });
+  }
+
+  try {
+    const isPending = await FriendService.checkPendingRequest(senderId as string, receiverId as string);
+    return res.status(200).json({ isPending });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Đã xảy ra lỗi khi kiểm tra trạng thái lời mời." });
+  }
+});
+
 router.get("/", async (req: Request & { auth?: any }, res: Response) => {
   const userId = req.auth?.sub;
 
