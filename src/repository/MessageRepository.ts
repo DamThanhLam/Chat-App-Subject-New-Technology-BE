@@ -107,7 +107,7 @@ export class MessageRepository {
           (a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )
-        .slice(0, 20); // Lấy 20 bản ghi đầu tiên sau khi sort
+        // Lấy 20 bản ghi đầu tiên sau khi sort
 
       // Log dữ liệu sau khi sắp xếp
       console.log("messages (sorted):", sortedMessages);
@@ -125,7 +125,7 @@ export class MessageRepository {
         ":friendId": { S: friendId },
       },
       FilterExpression:
-        "(senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId) AND not contains(deletedBy, :userId)",
+        "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND not contains(deletedBy, :userId)",
     };
     const command = new ScanCommand(input);
     const response = await docClient.send(command);
@@ -142,14 +142,14 @@ export class MessageRepository {
   async getById(messageId: string): Promise<Message | null> {
     const command = new GetCommand({
       TableName: TABLE_NAME,
-      Key: { id: { S: messageId } },
+      Key: { id: messageId },
     });
     const result = await docClient.send(command);
     const item = result.Item;
     if (!item) {
       return null; // hoặc throw new Error("Not found")
     }
-    return unmarshall(item) as Message;
+    return item as Message;
   }
   async update(message: Message) {
     const command = new PutCommand({ TableName: TABLE_NAME, Item: message });

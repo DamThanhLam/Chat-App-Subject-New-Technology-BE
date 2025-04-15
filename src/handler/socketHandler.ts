@@ -32,7 +32,7 @@ export function socketHandler(io: Server) {
     // });
 
 
-    socket.on("private-message", async(raw: string | object) => {
+    socket.on("private-message", async (raw: string | object) => {
       let message: Message;
 
       if (typeof raw === "string") {
@@ -50,7 +50,7 @@ export function socketHandler(io: Server) {
       message.senderId = user.sub;
       const receiverSocketId = users[message.receiverId];
 
-      message.status=receiverSocketId ? "received": "sended"
+      message.status = receiverSocketId ? "received" : "sended"
       try {
         const messageResult = await messageService.post(message)
         // Nếu tìm được người nhận thì gửi tin nhắn
@@ -58,7 +58,7 @@ export function socketHandler(io: Server) {
           io.to(receiverSocketId).emit("private-message", {
             message,
           });
-          socket.emit("result", { code: 200, message: messageResult});
+          socket.emit("result", { code: 200, message: messageResult });
           return
         } else {
           socket.emit("result", { message: messageResult, code: 405 });
@@ -74,7 +74,7 @@ export function socketHandler(io: Server) {
 
     socket.on("send-friend-request", async (data) => {
       const user = (socket as any).user;
-    
+
       if (!user || !data?.receiverId) {
         socket.emit("send-friend-request-response", {
           code: 401,
@@ -82,16 +82,16 @@ export function socketHandler(io: Server) {
         });
         return;
       }
-    
+
       console.log("Gửi lời mời kết bạn từ:", user.sub);
       console.log("Gửi lời mời đến:", data.receiverId);
-    
+
       try {
         //GỌI API /api/friends/add để lưu lời mời vào DB
         const response = await axios.post(
           "http://localhost:3000/api/friends/add",
           {
-            senderId: user.sub, 
+            senderId: user.sub,
             receiverId: data.receiverId,
             message: data.message || "",
           },
@@ -100,10 +100,10 @@ export function socketHandler(io: Server) {
               Authorization: `Bearer ${socket.handshake.auth.token}`,
             },
           }
-        );        
-    
+        );
+
         console.log("Đã lưu lời mời kết bạn:", response.data);
-    
+
         // Gửi socket event tới người nhận
         const receiverSocketId = users[data.receiverId];
         io.to(receiverSocketId || "").emit("newFriendRequest", {
@@ -113,17 +113,17 @@ export function socketHandler(io: Server) {
           avatarUrl: user.avatar || "https://cdn-icons-png.flaticon.com/512/219/219983.png",
           createdAt: new Date().toISOString(),
         });
-    
+
         // Gửi phản hồi cho người gửi
         socket.emit("send-friend-request-response", {
           code: 200,
           message: "Yêu cầu kết bạn đã được gửi",
           data: response.data, // hoặc senderId/receiverId
         });
-    
+
       } catch (error: any) {
         console.error("Không thể lưu lời mời kết bạn:", error?.response?.data || error.message);
-    
+
         socket.emit("send-friend-request-response", {
           code: 500,
           error: "Không thể gửi lời mời kết bạn",
@@ -131,12 +131,12 @@ export function socketHandler(io: Server) {
         });
       }
     });
-    
-    
+
+
     socket.on("acceptFriendRequest", async (data) => {
       const { friendRequestId } = data;
       const token = socket.handshake.auth.token;
-    
+
       if (!friendRequestId || !token) {
         socket.emit("acceptFriendRequestResponse", {
           code: 400,
@@ -144,29 +144,29 @@ export function socketHandler(io: Server) {
         });
         return;
       }
-    
+
       try {
         // Chấp nhận lời mời kết bạn
         const updatedRequest = await FriendService.acceptFriendRequest(friendRequestId);
-    
+
         // Thông báo cho cả hai người
         const senderSocketId = users[updatedRequest.senderId];
         const receiverSocketId = users[updatedRequest.receiverId];
-    
+
         // Thông báo cho người nhận về việc chấp nhận lời mời
         if (senderSocketId) {
           io.to(senderSocketId).emit("friendRequestAccepted", {
             fromUserId: updatedRequest.receiverId,
           });
         }
-    
+
         // Thông báo cho người gửi về việc chấp nhận
         if (receiverSocketId) {
           io.to(receiverSocketId).emit("friendRequestAccepted", {
             fromUserId: updatedRequest.senderId,
           });
         }
-    
+
         socket.emit("acceptFriendRequestResponse", {
           code: 200,
           message: "Đã chấp nhận lời mời",
@@ -181,14 +181,14 @@ export function socketHandler(io: Server) {
         });
       }
     });
-    
-    
+
+
 
     // Lắng nghe sự kiện "decline-friend-request"
     socket.on("declineFriendRequest", async (data) => {
       const { friendRequestId } = data;
       const token = socket.handshake.auth.token;
-    
+
       if (!friendRequestId || !token) {
         socket.emit("declineFriendRequestResponse", {
           code: 400,
@@ -196,11 +196,11 @@ export function socketHandler(io: Server) {
         });
         return;
       }
-    
+
       try {
         // Hủy lời mời kết bạn
         const cancelledRequest = await FriendService.cancelFriendRequest(friendRequestId);
-    
+
         // Kiểm tra nếu cancelledRequest trả về null, nghĩa là không tìm thấy yêu cầu kết bạn
         if (!cancelledRequest) {
           socket.emit("declineFriendRequestResponse", {
@@ -209,7 +209,7 @@ export function socketHandler(io: Server) {
           });
           return;
         }
-    
+
         // Thông báo cho người gửi về việc từ chối lời mời
         const senderSocketId = users[cancelledRequest.senderId];
         if (senderSocketId) {
@@ -217,7 +217,7 @@ export function socketHandler(io: Server) {
             fromUserId: cancelledRequest.receiverId,
           });
         }
-    
+
         socket.emit("declineFriendRequestResponse", {
           code: 200,
           message: "Lời mời kết bạn đã bị từ chối",
@@ -233,32 +233,27 @@ export function socketHandler(io: Server) {
       }
     });
 
-    socket.on("recall-message",async(messageId:string)=>{
+    socket.on("recall-message", async (messageId: string) => {
       const user = (socket as any).user;
       const message = await messageService.getById(messageId)
-      if(message){
+      if (message) {
         message.status = "recalled"
-        message.message="message recalled";
+        message.message = "message recalled";
         messageService.update(message)
-        const receiverSocketId = users[message.receiverId];
-        receiverSocketId && io.to(receiverSocketId).emit("recall-message", {
-          message: message
-        })
+        socket.emit("message-recalled", { message: message });
         return
       }
       socket.emit("error", { error: "Message not found to be recalled", code: 400 });
     })
-    socket.on("delete-message",async(messageId:string)=>{
+    socket.on("delete-message", async (messageId: string) => {
       const user = (socket as any).user;
+      console.log(messageId)
       const message = await messageService.getById(messageId)
-      if(message){
-        message.status = "deleted"
-        message.message="message deleted";
-        messageService.update(message)
-        const receiverSocketId = users[message.receiverId];
-        receiverSocketId && io.to(receiverSocketId).emit("delete-message", {
-          messageId: messageId
-        })
+      if (message) {
+        message.deletedBy ? "" : message.deletedBy = []
+        message.deletedBy.push(user.sub)
+        await messageService.update(message)
+        socket.emit("message-deleted", { messageId: messageId });
         return
       }
       socket.emit("error", { error: "Message not found to be recalled", code: 400 });
