@@ -106,7 +106,7 @@ export const moveQueueRequestJoinConversation = async (
       throw new Error("Không tìm thấy cuộc trò chuyện");
     }
 
-    
+
     const user = await userRepository.findById(newUserId)
 
     if (!user) {
@@ -115,7 +115,7 @@ export const moveQueueRequestJoinConversation = async (
 
     conversation.requestJoin = [...conversation.requestJoin, { id: newUserId, method: method }]
 
-    const listInvite = user.listInvite? [...user.listInvite,{ id: newUserId, method: method }]:[{ id: newUserId, method: method }]
+    const listInvite = user.listInvite ? [...user.listInvite, { id: newUserId, method: method }] : [{ id: newUserId, method: method }]
     await userRepository.updateUser(user.id, { listInvite: listInvite })
 
     await conversationRepository.update(
@@ -165,7 +165,10 @@ export const findCommonGroups = async (
     throw new Error(`Không thể tìm nhóm chung: ${error.message}`);
   }
 };
-export const leaveRoom = async(userId:string, roomId:string)=>{
+export const leaveRoom = async (userId: string, roomId: string) => {
+  const user = await userRepository.findById(userId)
+  const listConversation = user?.listConversation?.filter(item => item != roomId)
+  await userRepository.updateUser(userId, { listConversation: listConversation })
 
 }
 // export const getConversationById = async (

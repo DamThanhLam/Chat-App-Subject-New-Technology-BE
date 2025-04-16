@@ -36,7 +36,7 @@ export const getPermission = async(conversationId: string)=>{
   if(!conversation) return null;
   return conversation.permission;
 }
-// // Tạo cuộc trò chuyện mới
+// Tạo cuộc trò chuyện mới
 // export const createConversation = async (
 //   participants: string[],
 //   groupName?: string
@@ -136,7 +136,11 @@ export const getConversationByLink= async(link:string)=>{
   const item = (await docClient.send(command)).Items?.at(0)
   return item as Conversation
 }
-
+export const getAllConversationId = async()=>{
+  const command = new ScanCommand({TableName:TABLE_NAME})
+  const listConversationId = (await docClient.send(command)).Items?.map(item=>{return item.id})
+  return listConversationId
+}
 // Cập nhật người tham gia cuộc trò chuyện
 export const addUsersToConversation = async (
   conversationId: string,

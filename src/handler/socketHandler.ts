@@ -79,7 +79,7 @@ export function socketHandler(io: Server) {
       }
     });
     // Rời khỏi room
-    socket.on('leaveRoom',async (roomId) => {
+    socket.on('leaveRoom', async (roomId) => {
       const user = (socket as any).user;
       socket.leave(roomId);
       users[user.sub].rooms.delete(roomId);
@@ -88,14 +88,30 @@ export function socketHandler(io: Server) {
     });
 
     // Gửi tin nhắn đến 1 room
-    socket.on('chatMessage', ({ roomName, message }) => {
+    socket.on('group-message', async (raw: string | object) => {
       const user = (socket as any).user;
+      let message: Message;
 
-      // io.to(roomName).emit('chatMessage', {
-      //   room: roomName,
-      //   user: username,
-      //   text: message
-      // });
+      if (typeof raw === "string") {
+        try {
+          message = JSON.parse(raw);
+        } catch (e) {
+          console.error("Invalid JSON:", e);
+          return;
+        }
+      } else {
+        message = raw as Message;
+      }
+      message.senderId = user.sub;
+      const roomCurrent = users[user.id].rooms.filter((item: any) => item === message.conversationId)
+      message.status = roomCurrent ? "received" : "sended"
+
+      const messageResult = await messageService.post(message)
+
+      roomCurrent && io.to(roomCurrent).emit('group-message', {
+        message: messageResult
+      });
+      socket.emit("result", { code: 200, message: messageResult });
     });
     socket.on("send-friend-request", async (data) => {
       const user = (socket as any).user;
