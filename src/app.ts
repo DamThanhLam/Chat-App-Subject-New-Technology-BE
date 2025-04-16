@@ -21,13 +21,26 @@ dotenv.config();
 const app = express();
 
 
+// app.use(cors({
+//   origin: "http://localhost:8081", // hoặc web app của bạn
+//   credentials: true,
+//   allowedHeaders: ["Authorization", "Content-Type"],
+// }));
+// app.options("*", cors({
+//   origin: "http://localhost:8081",
+//   credentials: true,
+//   allowedHeaders: ["Authorization", "Content-Type"]
+// }));
+// Cho phép mọi origin
 app.use(cors({
-  origin: "http://localhost:8081", // hoặc web app của bạn
+  origin: true, // hoặc '*', nhưng dùng true thì sẽ hoạt động tốt hơn với credentials
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type"],
 }));
+
+// Xử lý preflight requests (OPTIONS)
 app.options("*", cors({
-  origin: "http://localhost:8081",
+  origin: true,
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type"]
 }));

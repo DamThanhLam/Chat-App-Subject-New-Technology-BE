@@ -241,6 +241,8 @@ export function socketHandler(io: Server) {
         message.message = "message recalled";
         messageService.update(message)
         socket.emit("message-recalled", { message: message });
+        const senderSocketId = users[message.receiverId];
+        io.to(senderSocketId).emit("message-recalled",  { message: message });
         return
       }
       socket.emit("error", { error: "Message not found to be recalled", code: 400 });
