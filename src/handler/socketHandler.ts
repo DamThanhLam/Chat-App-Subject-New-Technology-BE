@@ -79,7 +79,7 @@ export function socketHandler(io: Server) {
       }
     });
     // Rời khỏi room
-    socket.on('leaveRoom', async (roomId) => {
+    socket.on('leave-room', async (roomId) => {
       const user = (socket as any).user;
       socket.leave(roomId);
       users[user.sub].rooms.delete(roomId);
