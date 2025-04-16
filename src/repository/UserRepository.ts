@@ -29,6 +29,14 @@ export class UserRepository {
     await docClient.send(params);
     return user;
   }
+  async findUserId(id: string) {
+    const command = new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { id: id }
+    })
+    const user = (await docClient.send(command)).Item as User
+    return user.name
+  }
 
   async getUsers(): Promise<User[]> {
     const params = new ScanCommand({ TableName: TABLE_NAME });
@@ -123,7 +131,7 @@ export class UserRepository {
         ":email": email
       }
     });
-  
+
     try {
       const result = await docClient.send(params);
       console.log("Scan result:", result);
@@ -137,6 +145,6 @@ export class UserRepository {
       throw new Error("Error querying DynamoDB");
     }
   }
-  
-  
+
+
 }

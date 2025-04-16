@@ -1,10 +1,16 @@
 export interface User {
-  id: String | null;
+  id: string;
   name: string;
-  email: String;
-  phoneNumber: String;
+  email: string;
+  phoneNumber: string;
   status: "online" | "offline";
   createdAt: Date;
   updatedAt: Date;
   urlAVT: string;
+  listInvite?:{
+    method: string,
+    id: string
+  }[],
+  listConversation?: string[]
+
 }

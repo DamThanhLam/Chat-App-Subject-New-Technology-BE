@@ -7,23 +7,30 @@ import MessageService from "../services/MessageService";
 import * as FriendService from '../services/FriendService';
 import axios from "axios";
 import { declineFriendRequestById } from "../repository/FriendRepository";
+import { autoJoinToGroup, checkPermissionAutoJoin, getConversationByLink, joinedGroup, leaveRoom, moveQueueRequestJoinConversation } from "../services/ConversationService";
+import { UserService } from "../services/UserService";
 
-const users: Record<string, string> = {};
+const users: Record<string, { socketId: string, rooms: any }> = {};
+const conversations: Record<string, string> = {}
 const messageService = new MessageService();
+const userService = new UserService()
+
+
 export function socketHandler(io: Server) {
+
   io.use(socketAuthMiddleware);
   io.on("connection", (socket: Socket) => {
-    socket.on("join", () => {
+    socket.on("join", async () => {
       const user = (socket as any).user;
-      if (!user) {
-        console.warn("User not authenticated properly");
-        return;
-      }
+      users[user.sub] = { socketId: socket.id, rooms: new Set() };
 
-      users[user.sub] = socket.id;
-      console.log("users");
-      console.log(users);
+      const infoUser = await userService.getUserById(user.sub)
+      infoUser?.listConversation?.forEach(item => {
+        socket.join(item);
+        users[user.sub].rooms.add(item)
+      })
     });
+
 
     // handleChat(socket, io);
 
@@ -48,14 +55,14 @@ export function socketHandler(io: Server) {
 
       const user = (socket as any).user;
       message.senderId = user.sub;
-      const receiverSocketId = users[message.receiverId];
+      const { socketId } = users[message.receiverId];
 
-      message.status = receiverSocketId ? "received" : "sended"
+      message.status = socketId ? "received" : "sended"
       try {
         const messageResult = await messageService.post(message)
         // Nếu tìm được người nhận thì gửi tin nhắn
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit("private-message", {
+        if (socketId) {
+          io.to(socketId).emit("private-message", {
             message,
           });
           socket.emit("result", { code: 200, message: messageResult });
@@ -71,7 +78,25 @@ export function socketHandler(io: Server) {
         });
       }
     });
+    // Rời khỏi room
+    socket.on('leaveRoom',async (roomId) => {
+      const user = (socket as any).user;
+      socket.leave(roomId);
+      users[user.sub].rooms.delete(roomId);
+      await leaveRoom(user.sub, roomId)
+      socket.to(roomId).emit('userLeft', `${user.name} đã rời phòng ${roomId}`);
+    });
 
+    // Gửi tin nhắn đến 1 room
+    socket.on('chatMessage', ({ roomName, message }) => {
+      const user = (socket as any).user;
+
+      // io.to(roomName).emit('chatMessage', {
+      //   room: roomName,
+      //   user: username,
+      //   text: message
+      // });
+    });
     socket.on("send-friend-request", async (data) => {
       const user = (socket as any).user;
 
@@ -105,8 +130,8 @@ export function socketHandler(io: Server) {
         console.log("Đã lưu lời mời kết bạn:", response.data);
 
         // Gửi socket event tới người nhận
-        const receiverSocketId = users[data.receiverId];
-        io.to(receiverSocketId || "").emit("newFriendRequest", {
+        const { socketId } = users[data.receiverId];
+        io.to(socketId || "").emit("newFriendRequest", {
           id: response.data.id, // ID của lời mời
           senderId: user.sub,
           name: user.name,
@@ -154,15 +179,15 @@ export function socketHandler(io: Server) {
         const receiverSocketId = users[updatedRequest.receiverId];
 
         // Thông báo cho người nhận về việc chấp nhận lời mời
-        if (senderSocketId) {
-          io.to(senderSocketId).emit("friendRequestAccepted", {
+        if (senderSocketId.socketId) {
+          io.to(senderSocketId.socketId).emit("friendRequestAccepted", {
             fromUserId: updatedRequest.receiverId,
           });
         }
 
         // Thông báo cho người gửi về việc chấp nhận
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit("friendRequestAccepted", {
+        if (receiverSocketId.socketId) {
+          io.to(receiverSocketId.socketId).emit("friendRequestAccepted", {
             fromUserId: updatedRequest.senderId,
           });
         }
@@ -211,9 +236,9 @@ export function socketHandler(io: Server) {
         }
 
         // Thông báo cho người gửi về việc từ chối lời mời
-        const senderSocketId = users[cancelledRequest.senderId];
-        if (senderSocketId) {
-          io.to(senderSocketId).emit("friendRequestDeclined", {
+        const { socketId } = users[cancelledRequest.senderId];
+        if (socketId) {
+          io.to(socketId).emit("friendRequestDeclined", {
             fromUserId: cancelledRequest.receiverId,
           });
         }
@@ -241,8 +266,8 @@ export function socketHandler(io: Server) {
         message.message = "message recalled";
         messageService.update(message)
         socket.emit("message-recalled", { message: message });
-        const senderSocketId = users[message.receiverId];
-        io.to(senderSocketId).emit("message-recalled",  { message: message });
+        const { socketId } = users[message.receiverId];
+        io.to(socketId).emit("message-recalled", { message: message });
         return
       }
       socket.emit("error", { error: "Message not found to be recalled", code: 400 });
@@ -270,9 +295,40 @@ export function socketHandler(io: Server) {
       delete users[user.sub];
       io.emit("user-list", Object.values(users));
     });
+    socket.on("invite-join-group", async (conversationId: string, newUserId: string) => {
+      const user = (socket as any).user;
+      if (await joinedGroup(conversationId, user.sub)) {
+        io.emit("response-invite-join-group", { message: "you had joined this group" })
+        return
+      }
+      const userNameCurrent = await userService.getUserName(user.sub);
+      if (await checkPermissionAutoJoin(conversationId)) {
+        const message = autoJoinToGroup(conversationId, newUserId, userNameCurrent)
+        io.emit("response-invite-join-group", { message: message })
+      } else {
+        const message = moveQueueRequestJoinConversation(conversationId, newUserId, userNameCurrent)
+        io.emit("response-invite-join-group", { message: message })
+      }
+    })
+    // socket.on("link-join-group", async (link: string) => {
+    //   const user = (socket as any).user;
+    //   const conversation = await getConversationByLink(link)
+    //   if (conversation) {
+    //     if (await joinedGroup(conversation.id, user.sub)) {
+    //       io.emit("response-invite-join-group", { message: "you had joined this group" })
+    //       return
+    //     }
+    //     const userNameCurrent = await userService.getUserName(user.sub);
+    //     if (await checkPermissionAutoJoin(conversation.id)) {
+    //       const message = autoJoinToGroup(conversation.id, user.sub, "Join by link")
+    //       io.emit("response-invite-join-group", { message: message })
+    //     } else {
+    //       const message = moveQueueRequestJoinConversation(conversation.id, user.sub, userNameCurrent)
+    //       io.emit("response-invite-join-group", { message: message })
+    //     }
+    //   }
+    // })
+
   });
 }
 
-function getSocketIdByUsername(username: string): string | undefined {
-  return Object.keys(users).find((socketId) => users[socketId] === username);
-}
