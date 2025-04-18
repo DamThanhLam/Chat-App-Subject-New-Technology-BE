@@ -71,7 +71,7 @@ app.use((req, res, next) => {
 app.use('/api/user', authenticateJWT, userRoutes)
 app.use("/api/friends", authenticateJWT, friendRoutes);
 app.use("/api/nickname", authenticateJWT, nicknameRoutes);
-app.use("/api/conversation", authenticateJWT, conversationRoutes);
+app.use("/api/conversations", authenticateJWT, conversationRoutes);
 app.use("/api/message", authenticateJWT, messageRoute);
 app.use("/api/friends", authenticateJWT, friendRoutes);
 // Socket.IO
