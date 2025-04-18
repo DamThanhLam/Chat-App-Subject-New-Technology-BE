@@ -16,6 +16,90 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = "Conversation";
 
+// Hàm tạo nhóm mới
+export const createConversation = async (
+  leaderId: string,
+  participantIds: string[],
+  groupName: string = "Nhóm mới"
+): Promise<Conversation> => {
+  const uniqueParticipants = Array.from(new Set([leaderId, ...participantIds]));
+  const participants = uniqueParticipants.map(id => ({
+    id,
+    method: "normal"
+  }));
+
+  const conversation: Conversation = {
+    id: uuidv4(),
+    participants,
+    participantsIds: uniqueParticipants,
+    groupName,
+    leaderId,
+    deputyId: "",
+    createAt: new Date().toISOString(),
+    updateAt: new Date().toISOString(),
+    lastMessage: null,
+    parentMessage: null,
+    linkJoin: "",
+    listBlock: [],
+    permission: { 
+      acceptJoin: true, 
+      chat: true 
+    },
+    requestJoin: [],
+    avatarUrl: ""
+  };
+
+  await docClient.send(new PutCommand({
+    TableName: TABLE_NAME,
+    Item: conversation
+  }));
+
+  return conversation;
+};
+
+// Hàm lấy danh sách nhóm theo userId (sử dụng participantsIds)
+export const getConversationsByUserId = async (userId: string): Promise<Conversation[]> => {
+  try {
+    const command = new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "contains(participantsIds, :userId)",
+      ExpressionAttributeValues: {
+        ":userId": userId,
+      },
+    });
+
+    const result = await docClient.send(command);
+    return result.Items as Conversation[];
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách nhóm:", error);
+    throw new Error("Không thể lấy danh sách nhóm.");
+  }
+};
+
+
+export const saveConversation = async (conversation: Conversation): Promise<void> => {
+  const command = new PutCommand({
+    TableName: TABLE_NAME,
+    Item: conversation,
+  });
+
+  await docClient.send(command);
+};
+
+// Hàm lấy các nhóm mà người dùng đã gia nhập
+export const getConversationsByUser = async (userId: string): Promise<Conversation[]> => {
+  const command = new ScanCommand({
+    TableName: TABLE_NAME,
+    FilterExpression: "contains(participants, :userId)",
+    ExpressionAttributeValues: {
+      ":userId": userId,
+    },
+  });
+
+  const { Items } = await docClient.send(command);
+  return Items as Conversation[];
+};
+
 export const joinedGroup = async(conversationId: string, userId: string)=>{
   const command =new GetCommand({
     TableName: TABLE_NAME,
@@ -26,6 +110,7 @@ export const joinedGroup = async(conversationId: string, userId: string)=>{
   if(conversation.participants.filter(item=>item.id === userId)) return true
   return false
 }
+
 export const getPermission = async(conversationId: string)=>{
   const command =new GetCommand({
     TableName: TABLE_NAME,
@@ -164,7 +249,6 @@ export const addUsersToConversation = async (
   return result.Attributes as Conversation;
 };
 
-// Tìm các nhóm chung giữa hai người dùng
 export const findCommonGroups = async (
   userId: string,
   targetUserId: string,
@@ -173,8 +257,10 @@ export const findCommonGroups = async (
 ) => {
   const params = {
     TableName: TABLE_NAME,
-    FilterExpression:
-      "contains(participants, :userId) AND contains(participants, :targetUserId)",
+    FilterExpression: `
+      (participants[0].id = :userId OR participants[1].id = :userId OR participants[2].id = :userId) AND
+      (participants[0].id = :targetUserId OR participants[1].id = :targetUserId OR participants[2].id = :targetUserId)
+    `,
     ExpressionAttributeValues: {
       ":userId": userId,
       ":targetUserId": targetUserId,
