@@ -24,6 +24,11 @@ export interface Conversation {
   leaderId: string;
   deputyId: string;
   avatarUrl?: string; // Thêm nếu cần
+  pendingParticipants?: {
+    method: string;
+    id: string;
+    invitedBy: string;
+  }[];
 }
 
 // Hàm tạo Conversation mới (đã bổ sung participantsIds)
@@ -56,6 +61,7 @@ export const createConversationModel = (
       chat: true 
     },
     requestJoin: [],
-    avatarUrl: options?.avatarUrl || ""
+    avatarUrl: options?.avatarUrl || "",
+    pendingParticipants: [],
   };
 };

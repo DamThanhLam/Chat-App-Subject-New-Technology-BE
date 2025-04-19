@@ -28,8 +28,20 @@ export const createGroupConversation = async (
 };
 
 export const getConversationsOfUser = async (userId: string): Promise<Conversation[]> => {
-  if (!userId) throw new Error("UserId là bắt buộc");
-  return await conversationRepository.getConversationsByUserId(userId);
+  if (!userId) {
+    console.error("UserId không được để trống");
+    throw new Error("UserId là bắt buộc");
+  }
+
+  try {
+    console.log(`Đang lấy nhóm cho user ${userId}`);
+    const groups = await conversationRepository.getConversationsByUserId(userId);
+    console.log(`Tìm thấy ${groups.length} nhóm`);
+    return groups;
+  } catch (error: any) {
+    console.error(`Lỗi service: ${error.message}`);
+    throw new Error("Không thể lấy danh sách nhóm từ service");
+  }
 };
 
 
