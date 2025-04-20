@@ -58,59 +58,81 @@ export class UserRepository {
 
     const result = await docClient.send(params);
     if (!result.Item) return null;
-    console.log(`User found: ${JSON.stringify(result.Item)}`);
+
+    // Chuyển kiểu Date chỉ khi cần dùng, không lưu ngược lại vào DB
+    const user = result.Item;
 
     return {
-      ...result.Item,
-      createdAt: new Date(result.Item.createdAt),
-      updatedAt: new Date(result.Item.updatedAt),
+      ...user,
+      createdAt: typeof user.createdAt === "string" ? new Date(user.createdAt) : user.createdAt,
+      updatedAt: typeof user.updatedAt === "string" ? new Date(user.updatedAt) : user.updatedAt,
     } as User;
   }
-
   async updateUser(
     id: string,
     updatedData: Partial<User>
   ): Promise<User | null> {
-    (updatedData as any).updatedAt = new Date().toISOString();
+    // 1. Cập nhật updatedAt
+    const now = new Date();
+    (updatedData as any).updatedAt = now.toISOString();
 
-    const updateExpression = `set ${Object.keys(updatedData)
-      .map((key, index) => `#${key} = :value${index}`)
-      .join(", ")}`;
+    // 2. Lọc bỏ những field không muốn update
+    delete (updatedData as any).createdAt;
+    delete (updatedData as any).id;  // <-- bỏ qua id
 
-    const expressionAttributeNames = Object.keys(updatedData).reduce(
-      (acc, key, index) => {
-        acc[`#${key}`] = key;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
+    // 3. Lấy danh sách keys sau khi đã lọc
+    const keys = Object.keys(updatedData);
+    if (keys.length === 0) {
+      // Không có gì để update
+      return this.findById(id);
+    }
 
-    const expressionAttributeValues = Object.keys(updatedData).reduce(
-      (acc, key, index) => {
-        acc[`:value${index}`] = updatedData[key as keyof User]; // Đảm bảo giá trị đúng kiểu
-        return acc;
-      },
-      {} as Record<string, any>
-    );
+    // 4. Build UpdateExpression
+    const updateExpression = `SET ${keys
+      .map((key, i) => `#${key} = :v${i}`)
+      .join(', ')}`;
 
+    const ExpressionAttributeNames = keys.reduce((acc, key) => {
+      acc['#' + key] = key;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const ExpressionAttributeValues = keys.reduce((acc, key, i) => {
+      let val = updatedData[key as keyof User];
+      if (val instanceof Date) {
+        val = val.toISOString();
+      }
+      acc[`:v${i}`] = val;
+      return acc;
+    }, {} as Record<string, any>);
+
+    // 5. Gửi lệnh lên DynamoDB
     const params = new UpdateCommand({
       TableName: TABLE_NAME,
-      Key: { id },
+      Key: { id:id },
       UpdateExpression: updateExpression,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: "ALL_NEW",
+      ExpressionAttributeNames,
+      ExpressionAttributeValues,
+      ReturnValues: 'ALL_NEW',
     });
 
     const result = await docClient.send(params);
     if (!result.Attributes) return null;
 
+    // 6. Chuyển ISO string thành Date khi trả về
     return {
       ...result.Attributes,
-      createdAt: new Date(result.Attributes.createdAt),
-      updatedAt: new Date(result.Attributes.updatedAt),
+      createdAt:
+        typeof result.Attributes.createdAt === 'string'
+          ? new Date(result.Attributes.createdAt)
+          : result.Attributes.createdAt,
+      updatedAt:
+        typeof result.Attributes.updatedAt === 'string'
+          ? new Date(result.Attributes.updatedAt)
+          : result.Attributes.updatedAt,
     } as User;
   }
+
 
   async addUserToGroup(userId: string, groupId: string): Promise<void> {
     const user = await this.findById(userId);

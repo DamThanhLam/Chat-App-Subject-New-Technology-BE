@@ -26,11 +26,12 @@ export const createConversation = async (
   const uniqueParticipants = Array.from(new Set([leaderId, ...participantIds]));
   const participants = uniqueParticipants.map((id) => ({
     id,
-    method: "normal",
+    method: leaderId,
   }));
+  console.log(uniqueParticipants)
 
   const conversation: Conversation = {
-    id: uuidv4(),
+    id: uuidv4().toString(),
     participants,
     participantsIds: uniqueParticipants,
     groupName,

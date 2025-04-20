@@ -20,6 +20,15 @@ export const createGroupConversation = async (
     participantIds,
     groupName
   );
+  participantIds.map(async(item) => {
+    const user = await userRepository.findById(item)
+    if(!user) return
+    if (!user.listConversation) {
+      user.listConversation = [];
+    }
+    user.listConversation.push(item)
+    userRepository.updateUser(user.id,user)
+  })
 
   return {
     conversation,

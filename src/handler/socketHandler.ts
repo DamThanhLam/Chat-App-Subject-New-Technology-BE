@@ -9,6 +9,7 @@ import axios from "axios";
 import { declineFriendRequestById } from "../repository/FriendRepository";
 import { autoJoinToGroup, checkPermissionAutoJoin, getConversationByLink, joinedGroup, leaveRoom, moveQueueRequestJoinConversation } from "../services/ConversationService";
 import { UserService } from "../services/UserService";
+import * as conversationService from "../services/ConversationService";
 
 const users: Record<string, { socketId: string, rooms: any }> = {};
 const conversations: Record<string, string> = {}
@@ -32,53 +33,89 @@ export function socketHandler(io: Server) {
       })
       console.log(users)
       console.log("connection-------------------------------")
-     
+
     });
 
     socket.on("join-group", async (conversationId: string) => {
 
       const user = (socket as any).user;
-      if (!user) { 
-          console.error("Join-group event received from unauthenticated socket.");
-          socket.emit("error", { error: "Unauthorized", code: 401 });
-          return;
+      if (!user) {
+        console.error("Join-group event received from unauthenticated socket.");
+        socket.emit("error", { error: "Unauthorized", code: 401 });
+        return;
       }
 
-     console.log(`User ${user.sub} requesting to join room: ${conversationId}`);
-     if (!conversationId) {
+      console.log(`User ${user.sub} requesting to join room: ${conversationId}`);
+      if (!conversationId) {
         socket.emit("error", { error: "Missing conversationId to join", code: 400 });
         return;
-     }
+      }
 
-     try {
-         const isMember = await joinedGroup(conversationId, user.sub);
-         if (!isMember) {
-             console.warn(`User ${user.sub} attempted to join room ${conversationId} but is not a member.`);
-             socket.emit("error", { error: "Not a member of this group", code: 403 });
-             return; 
-         }
+      try {
+        const isMember = await joinedGroup(conversationId, user.sub);
+        if (!isMember) {
+          console.warn(`User ${user.sub} attempted to join room ${conversationId} but is not a member.`);
+          socket.emit("error", { error: "Not a member of this group", code: 403 });
+          return;
+        }
 
 
-         socket.join(conversationId);
-         users[user.sub]?.rooms.add(conversationId); 
-         console.log(`User ${user.sub} successfully joined room: ${conversationId}`);
-         socket.emit('room-joined', { conversationId: conversationId, success: true });
+        socket.join(conversationId);
+        users[user.sub]?.rooms.add(conversationId);
+        console.log(`User ${user.sub} successfully joined room: ${conversationId}`);
+        socket.emit('room-joined', { conversationId: conversationId, success: true });
 
-     } catch (error) {
-         console.error(`Error joining room ${conversationId} for user ${user.sub}:`, error);
-          socket.emit('room-join-error', { conversationId: conversationId, error: 'Failed to join room' });
-     }
-   });
+      } catch (error) {
+        console.error(`Error joining room ${conversationId} for user ${user.sub}:`, error);
+        socket.emit('room-join-error', { conversationId: conversationId, error: 'Failed to join room' });
+      }
+    });
     // handleChat(socket, io);
 
     // socket.on("group-message", (message: string) => {
     //   io.emit("group-message", { user: users[socket.id], message });
     // });
 
+    socket.on("create-group", async (data: any) => {
+      try {
+        const user = (socket as any).user; // hoặc .id tùy theo cách bạn gắn
+        if (!user) {
+          return socket.emit("create-group-error", { error: "Unauthorized" });
+        }
 
+        const { participantIds, groupName } = data;
+
+        if (!Array.isArray(participantIds)) {
+          return socket.emit("create-group-error", {
+            error: "Danh sách thành viên phải là mảng",
+          });
+        }
+
+        const result = await conversationService.createGroupConversation(
+          user.sub,
+          participantIds,
+          groupName
+        );
+
+        // Emit kết quả tạo nhóm thành công về client
+        socket.emit("group-created", result);
+
+        // Đồng thời có thể emit tới các thành viên khác trong nhóm nếu muốn:
+        participantIds.forEach((participantId) => {
+          const targetSocket = users[participantId]?.socketId; // bạn cần tự xây hàm này
+          if (targetSocket) {
+            io.to(targetSocket).emit("added-to-group", result);
+          }
+        });
+
+      } catch (error: any) {
+        console.error("Lỗi tạo nhóm:", error);
+        socket.emit("create-group-error", { error: error.message });
+      }
+    });
     socket.on("private-message", async (raw: string | object) => {
       let message: Message;
-    
+
       if (typeof raw === "string") {
         try {
           message = JSON.parse(raw);
@@ -89,10 +126,10 @@ export function socketHandler(io: Server) {
       } else {
         message = raw as Message;
       }
-    
+
       const user = (socket as any).user;
       message.senderId = user.sub;
-    
+
       // Kiểm tra receiverId có hợp lệ không
       if (!message.receiverId) {
         socket.emit("error", {
@@ -101,13 +138,13 @@ export function socketHandler(io: Server) {
         });
         return;
       }
-    
+
       const socketJoin = users[message.receiverId];
       message.status = socketJoin ? "received" : "sended";
-    
+
       try {
         const messageResult = await messageService.post(message);
-    
+
         // Nếu tìm được người nhận thì gửi tin nhắn
         if (socketJoin) {
           io.to(socketJoin.socketId).emit("private-message", {
@@ -124,7 +161,7 @@ export function socketHandler(io: Server) {
         });
       }
     });
-    
+
     // Rời khỏi room
     socket.on('leave-room', async (roomId) => {
       const user = (socket as any).user;
@@ -140,9 +177,9 @@ export function socketHandler(io: Server) {
       // 1. Lấy thông tin người gửi (tương tự private-message)
       const user = (socket as any).user;
       if (!user) {
-          console.error("Group-message event received from unauthenticated socket.");
-          socket.emit("error", { error: "Unauthorized", code: 401 });
-          return;
+        console.error("Group-message event received from unauthenticated socket.");
+        socket.emit("error", { error: "Unauthorized", code: 401 });
+        return;
       }
 
       // 2. Phân tích cú pháp tin nhắn (tương tự private-message)
@@ -151,9 +188,9 @@ export function socketHandler(io: Server) {
         message = typeof raw === "string" ? JSON.parse(raw) : raw as Message;
         // Kiểm tra conversationId cho tin nhắn nhóm
         if (!message.conversationId) {
-           console.error("Missing conversationId in group message from user:", user.sub);
-           socket.emit("error", { error: "Missing conversationId", code: 400 });
-           return;
+          console.error("Missing conversationId in group message from user:", user.sub);
+          socket.emit("error", { error: "Missing conversationId", code: 400 });
+          return;
         }
       } catch (e) {
         console.error("Invalid message format from user", user.sub, ":", e);
@@ -167,10 +204,10 @@ export function socketHandler(io: Server) {
       const isInSocketRoom = socket.rooms.has(message.conversationId);
 
       if (!isInSocketRoom) {
-          console.warn(`User ${user.sub} attempted to send message to room ${message.conversationId} but is not in the socket room.`);
-          // Trả về lỗi 403 nếu không có quyền gửi vào room này
-          socket.emit("error", { error: "Not in group room", code: 403 });
-          return;
+        console.warn(`User ${user.sub} attempted to send message to room ${message.conversationId} but is not in the socket room.`);
+        // Trả về lỗi 403 nếu không có quyền gửi vào room này
+        socket.emit("error", { error: "Not in group room", code: 403 });
+        return;
       }
       // (Trong private-message, bước này được thay bằng việc tìm socket người nhận)
 
@@ -188,9 +225,9 @@ export function socketHandler(io: Server) {
         const savedMessage = await messageService.post(message);
 
         if (!savedMessage) {
-             console.error("Failed to save message to DB for user:", user.sub);
-             socket.emit("error", { error: "Failed to save message", code: 500 });
-             return;
+          console.error("Failed to save message to DB for user:", user.sub);
+          socket.emit("error", { error: "Failed to save message", code: 500 });
+          return;
         }
 
         console.log(`Broadcasting message ${savedMessage.id} to room ${message.conversationId} from user ${user.sub}`);
@@ -384,24 +421,24 @@ export function socketHandler(io: Server) {
 
     socket.on("recall-message", async (messageId: string) => {
       const user = (socket as any).user;
-    
+
       try {
         const message = await messageService.getById(messageId);
-    
+
         if (!message) {
           socket.emit("error", { error: "Message not found to be recalled", code: 400 });
           return;
         }
-    
+
         // Cập nhật trạng thái recall
         message.status = "recalled";
         message.message = "message recalled";
-    
+
         await messageService.update(message);
-    
+
         // Gửi lại tin nhắn recall cho chính người gửi
         socket.emit("message-recalled", { message });
-    
+
         // Gửi cho người nhận (nếu có receiverId và đang online)
         if (message.receiverId) {
           const socketJoin = users[message.receiverId];
@@ -409,7 +446,7 @@ export function socketHandler(io: Server) {
             io.to(socketJoin.socketId).emit("message-recalled", { message });
           }
         }
-    
+
       } catch (err: any) {
         console.error("Error recalling message:", err);
         socket.emit("error", {
@@ -418,7 +455,7 @@ export function socketHandler(io: Server) {
         });
       }
     });
-    
+
     socket.on("delete-message", async (messageId: string) => {
       const user = (socket as any).user;
       const message = await messageService.getById(messageId)

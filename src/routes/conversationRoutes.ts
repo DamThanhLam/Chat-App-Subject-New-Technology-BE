@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import * as conversationService from "../services/ConversationService";
 import { authenticateJWT } from "../middelwares/authenticateJWT";
 
-// const router = Router();
+const router = Router();
 
 router.post(
   "/create-group",
