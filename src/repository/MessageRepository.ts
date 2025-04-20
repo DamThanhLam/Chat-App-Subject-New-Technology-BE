@@ -102,12 +102,11 @@ export class MessageRepository {
       }
 
       // Sắp xếp theo createdAt giảm dần (mới nhất trước)
-      const sortedMessages = messages
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        // Lấy 20 bản ghi đầu tiên sau khi sort
+      const sortedMessages = messages.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      // Lấy 20 bản ghi đầu tiên sau khi sort
 
       // Log dữ liệu sau khi sắp xếp
       console.log("messages (sorted):", sortedMessages);
@@ -342,6 +341,77 @@ export class MessageRepository {
     } catch (error: any) {
       console.error("Error in getMediaMessages:", error);
       throw new Error(`Failed to get media messages: ${error.message}`);
+    }
+  }
+
+  async getMessagesByConversationId(
+    conversationId: string,
+    userId: string,
+    exclusiveStartKey?: string
+  ): Promise<Message[]> {
+    try {
+      const input: any = {
+        TableName: TABLE_NAME,
+        ExpressionAttributeValues: {
+          ":conversationId": { S: conversationId },
+          ":userId": { S: userId },
+        },
+        FilterExpression:
+          "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
+        ScanIndexForward: false,
+      };
+
+      if (exclusiveStartKey) {
+        input.ExclusiveStartKey = {
+          id: { S: exclusiveStartKey },
+        };
+      }
+
+      const command = new ScanCommand(input);
+      const response = await docClient.send(command);
+
+      console.log("response.Items:", response.Items);
+
+      const messages = (response.Items ?? [])
+        .map((item) => {
+          try {
+            const message = unmarshall(item) as Message;
+            if (!message.createdAt) {
+              console.warn("Tin nhắn không có createdAt:", message);
+              return null;
+            }
+
+            const date = new Date(message.createdAt);
+            if (isNaN(date.getTime())) {
+              console.warn("Tin nhắn có createdAt không hợp lệ:", message);
+              return null;
+            }
+
+            return message;
+          } catch (error: any) {
+            console.error("Lỗi khi giải mã tin nhắn:", item, error.message);
+            return null;
+          }
+        })
+        .filter((message): message is Message => message !== null);
+
+      console.log("messages (filtered):", messages);
+
+      if (messages.length === 0) {
+        console.log("Không có tin nhắn hợp lệ để sắp xếp");
+        return [];
+      }
+
+      const sortedMessages = messages.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      console.log("messages (sorted):", sortedMessages);
+
+      return sortedMessages;
+    } catch (error: any) {
+      throw new Error(`Không thể lấy tin nhắn nhóm: ${error.message}`);
     }
   }
 }
