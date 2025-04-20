@@ -9,44 +9,93 @@ import { getConversation } from "../repository/ConversationRepository";
 
 const messageRepository = new MessageRepository();
 export default class MessageService {
-  async post(message: Message) {
-    // Kiểm tra receiverId
-    if (!message.receiverId) {
-      throw new Error("Receiver ID must not be null.");
-    }
 
-    // Kiểm tra contentType
-    switch (message.contentType) {
-      case "text":
-        if (
-          typeof message.message !== "string" ||
-          message.message.trim() === ""
-        ) {
-          throw new Error("Text message must be a non-empty string.");
-        }
-        break;
+async post(message: Message) {
+  if (message.messageType === 'private') {
+      if (!message.receiverId) {
+          throw new Error("Receiver ID must not be null for private messages.");
+      }
+      message.conversationId = undefined; 
+  } else if (message.messageType === 'group') {
+      if (!message.conversationId) {
+           throw new Error("Conversation ID must not be null for group messages.");
+      }
 
-      case "emoji":
-        if (
-          typeof message.message !== "string" ||
-          !/^[\u{1F600}-\u{1F64F}]+$/u.test(message.message)
-        ) {
-          throw new Error("Emoji message must be valid emoji string.");
-        }
-        break;
-
-      case "file":
-        break;
-
-      default:
-        throw new Error("Invalid content type.");
-    }
-
-    // Gán thời gian nếu chưa có
-    message.createdAt = new Date().toISOString();
-    message.updatedAt = message.createdAt;
-    return messageRepository.post(message);
+      message.receiverId = undefined;
+  } else {
+      throw new Error("Invalid message type.");
   }
+  switch (message.contentType) {
+    case "text":
+      if (
+        typeof message.message !== "string" ||
+        message.message.trim() === ""
+      ) {
+        throw new Error("Text message must be a non-empty string.");
+      }
+      break;
+
+    case "emoji":
+      // Regex này chỉ kiểm tra các emoji trong một số block Unicode cụ thể.
+      // Có thể cần regex phức tạp hơn hoặc kiểm tra khác tùy thuộc vào định nghĩa "valid emoji" của bạn.
+      if (
+        typeof message.message !== "string" ||
+        !message.message.split('').every(char => /\p{Emoji}/u.test(char)) // Kiểm tra từng ký tự có phải là emoji không
+      ) {
+         // Fallback kiểm tra regex cũ nếu regex mới không hoạt động hoặc môi trường không hỗ trợ đầy đủ unicode property escapes
+         if (
+           typeof message.message !== "string" ||
+           !/^[\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]+$/u.test(message.message) // Regex phức tạp hơn cho nhiều loại emoji
+         ) {
+           throw new Error("Emoji message must be a valid emoji string.");
+         }
+      }
+      break;
+
+    case "file":
+       // Đối với tin nhắn file, nội dung message nên là object FileMessage
+       if (typeof message.message !== 'object' || message.message === null) {
+            throw new Error("File message content must be an object.");
+       }
+       const fileMessageContent = message.message as FileMessage;
+       if (!fileMessageContent.data || typeof fileMessageContent.data !== 'string') {
+           throw new Error("File message object must contain a 'data' property (URL).");
+       }
+       // Thêm các kiểm tra khác cho filename, size, type nếu cần thiết
+      break;
+
+    default:
+      throw new Error("Invalid content type.");
+  }
+
+  // Gán thời gian nếu chưa có (hoặc luôn gán để đảm bảo server-side timestamp)
+  // Backend Socket handler đã set thời gian, nhưng gán lại ở đây cũng không sao,
+  // miễn là repository sử dụng giá trị này hoặc tự gán nếu chưa có.
+  if (!message.createdAt) {
+      message.createdAt = new Date().toISOString();
+  }
+   // Luôn cập nhật updatedAt
+  message.updatedAt = new Date().toISOString();
+
+
+  // Các thuộc tính khác cần đảm bảo tồn tại hoặc có giá trị mặc định
+   if (!message.senderId || typeof message.senderId !== 'string') {
+        throw new Error("Sender ID is required and must be a string.");
+   }
+    // Status nên được set từ Socket handler (sended/received), nhưng có thể gán mặc định ở đây
+   if (!message.status) {
+        message.status = 'sended'; // Mặc định là 'sended' khi tạo mới
+   }
+    // readed nên là mảng rỗng mặc định
+   if (!message.readed) {
+        message.readed = [];
+   }
+
+
+  // Lưu tin nhắn vào repository
+  return messageRepository.post(message);
+}
+
   async getByReceiverId(
     userId: string,
     friendId: string,

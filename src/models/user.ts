@@ -12,5 +12,4 @@ export interface User {
     id: string
   }[],
   listConversation?: string[]
-
 }
