@@ -16,6 +16,137 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = "Conversation";
 
+// Hàm tạo nhóm mới
+export const createConversation = async (
+  leaderId: string,
+  participantIds: string[],
+  groupName: string = "Nhóm mới"
+): Promise<Conversation> => {
+  // Validate input
+  if (!leaderId || !participantIds || !Array.isArray(participantIds)) {
+    throw new Error("Thông tin đầu vào không hợp lệ");
+  }
+
+  // Log để debug
+  console.log('Creating conversation with:', {
+    leaderId,
+    participantIds,
+    groupName
+  });
+
+  // Tạo danh sách participants (bao gồm cả leader và các thành viên)
+  const allParticipants = [
+    { id: leaderId, method: "normal" }, // Thêm leader vào danh sách
+    ...participantIds
+      .filter(id => id !== leaderId) // Loại bỏ leader nếu có trong participantIds
+      .map(id => ({ id, method: "normal" }))
+  ];
+
+  // Tạo danh sách participantsIds (chỉ chứa ID)
+  const participantsIds = allParticipants.map(p => p.id);
+
+  // Log để kiểm tra
+  console.log('Final participants:', allParticipants);
+  console.log('Final participantsIds:', participantsIds);
+
+  const conversation: Conversation = {
+    id: uuidv4(),
+    participants: allParticipants,
+    participantsIds,
+    groupName,
+    leaderId,
+    deputyId: "",
+    createAt: new Date().toISOString(),
+    updateAt: new Date().toISOString(),
+    lastMessage: null,
+    parentMessage: null,
+    linkJoin: "",
+    listBlock: [],
+    permission: { 
+      acceptJoin: true, 
+      chat: true 
+    },
+    requestJoin: [],
+    pendingParticipants: [],
+    avatarUrl: ""
+  };
+
+  await docClient.send(new PutCommand({
+    TableName: TABLE_NAME,
+    Item: conversation
+  }));
+
+  return conversation;
+};
+
+export const getConversationsByUserId = async (userId: string): Promise<Conversation[]> => {
+  try {
+    const command = new ScanCommand({ 
+      TableName: TABLE_NAME 
+    });
+    const result = await docClient.send(command);
+
+    const filteredGroups = (result.Items || []).filter((group: Record<string, any>) => {
+      // 1. Kiểm tra leader
+      const isLeader = group.leaderId === userId;
+
+      // 2. Kiểm tra trong participantsIds (mảng string)
+      const inParticipantsIds = Array.isArray(group.participantsIds)
+        ? group.participantsIds.includes(userId)
+        : false;
+
+      // 3. Kiểm tra trong participants (mảng string)
+      const inParticipants = Array.isArray(group.participants)
+        ? group.participants.includes(userId)
+        : false;
+
+      console.log(`Group ${group.id} check:`, {
+        isLeader,
+        inParticipantsIds,
+        inParticipants,
+        participantsIds: group.participantsIds,
+        participants: group.participants
+      });
+
+      return isLeader || inParticipantsIds || inParticipants;
+    }) as Conversation[];
+
+    console.log(`Found ${filteredGroups.length} groups for user ${userId}`, {
+      groupIds: filteredGroups.map((g: Conversation) => g.id)
+    });
+
+    return filteredGroups;
+  } catch (error) {
+    console.error("Error fetching groups:", error);
+    throw new Error("Không thể lấy danh sách nhóm");
+  }
+};
+
+
+
+export const saveConversation = async (conversation: Conversation): Promise<void> => {
+  const command = new PutCommand({
+    TableName: TABLE_NAME,
+    Item: conversation,
+  });
+
+  await docClient.send(command);
+};
+
+// Hàm lấy các nhóm mà người dùng đã gia nhập
+export const getConversationsByUser = async (userId: string): Promise<Conversation[]> => {
+  const command = new ScanCommand({
+    TableName: TABLE_NAME,
+    FilterExpression: "contains(participants, :userId)",
+    ExpressionAttributeValues: {
+      ":userId": userId,
+    },
+  });
+
+  const { Items } = await docClient.send(command);
+  return Items as Conversation[];
+};
+
 export const joinedGroup = async(conversationId: string, userId: string)=>{
   const command =new GetCommand({
     TableName: TABLE_NAME,
@@ -26,6 +157,7 @@ export const joinedGroup = async(conversationId: string, userId: string)=>{
   if(conversation.participants.filter(item=>item.id === userId)) return true
   return false
 }
+
 export const getPermission = async(conversationId: string)=>{
   const command =new GetCommand({
     TableName: TABLE_NAME,
@@ -164,7 +296,6 @@ export const addUsersToConversation = async (
   return result.Attributes as Conversation;
 };
 
-// Tìm các nhóm chung giữa hai người dùng
 export const findCommonGroups = async (
   userId: string,
   targetUserId: string,
@@ -173,8 +304,10 @@ export const findCommonGroups = async (
 ) => {
   const params = {
     TableName: TABLE_NAME,
-    FilterExpression:
-      "contains(participants, :userId) AND contains(participants, :targetUserId)",
+    FilterExpression: `
+      (participants[0].id = :userId OR participants[1].id = :userId OR participants[2].id = :userId) AND
+      (participants[0].id = :targetUserId OR participants[1].id = :targetUserId OR participants[2].id = :targetUserId)
+    `,
     ExpressionAttributeValues: {
       ":userId": userId,
       ":targetUserId": targetUserId,

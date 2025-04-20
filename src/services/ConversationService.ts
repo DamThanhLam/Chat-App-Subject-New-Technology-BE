@@ -1,9 +1,52 @@
 // src/services/ConversationService.ts
 import * as conversationRepository from "../repository/ConversationRepository";
-import { Conversation } from "../models/Conversation";
+import { Conversation, createConversationModel } from "../models/Conversation";
 import { UserRepository } from "../repository/UserRepository";
+import { v4 as uuidv4 } from 'uuid';
 const userRepository = new UserRepository()
-// Tạo nhóm chat từ đoạn chat đôi
+
+export const createGroupConversation = async (
+  leaderId: string,
+  participantIds: string[],
+  groupName: string = "Nhóm mới"
+): Promise<{ conversation: Conversation; message: string }> => {
+  // Validate input
+  if (!leaderId || !participantIds || !Array.isArray(participantIds)) {
+    throw new Error("Thông tin đầu vào không hợp lệ");
+  }
+
+  const conversation = await conversationRepository.createConversation(
+    leaderId,
+    participantIds,
+    groupName
+  );
+
+  return {
+    conversation,
+    message: "Tạo nhóm thành công"
+  };
+};
+
+export const getConversationsOfUser = async (userId: string): Promise<Conversation[]> => {
+  if (!userId) {
+    console.error("UserId không được để trống");
+    throw new Error("UserId là bắt buộc");
+  }
+
+  try {
+    console.log(`Đang lấy nhóm cho user ${userId}`);
+    const groups = await conversationRepository.getConversationsByUserId(userId);
+    console.log(`Tìm thấy ${groups.length} nhóm`);
+    return groups;
+  } catch (error: any) {
+    console.error(`Lỗi service: ${error.message}`);
+    throw new Error("Không thể lấy danh sách nhóm từ service");
+  }
+};
+
+
+
+//Tạo nhóm chat từ đoạn chat đôi
 // export const createGroupFromChat = async (
 //   currentUserId: string,
 //   friendUserId: string,
@@ -32,6 +75,7 @@ const userRepository = new UserRepository()
 //     throw new Error(`Không thể tạo nhóm: ${error.message}`);
 //   }
 // };
+
 export const joinedGroup = async (conversationId: string, userId: string): Promise<boolean> => {
   return conversationRepository.joinedGroup(conversationId, userId)
 }
