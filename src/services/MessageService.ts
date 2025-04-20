@@ -188,4 +188,16 @@ export default class MessageService {
       throw new Error(`Failed to get media messages: ${error.message}`);
     }
   }
+  // Thêm phương thức để lấy tin nhắn theo conversationId (chat nhóm)
+  async getByConversationId(
+    conversationId: string,
+    userId: string,
+    exclusiveStartKey: string
+  ): Promise<Message[] | null> {
+    return await messageRepository.getMessagesByConversationId(
+      conversationId,
+      userId,
+      exclusiveStartKey
+    );
+  }
 }

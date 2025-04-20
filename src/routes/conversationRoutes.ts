@@ -4,81 +4,96 @@ import { authenticateJWT } from "../middelwares/authenticateJWT";
 
 const router = Router();
 
+router.post(
+  "/create-group",
+  authenticateJWT,
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const leaderId = req.auth?.sub;
+      if (!leaderId) return res.status(401).json({ error: "Unauthorized" });
 
+      const { participantIds, groupName } = req.body;
 
-router.post("/create-group", authenticateJWT, async (req: Request & { auth?: any }, res: Response) => {
-  try {
-    const leaderId = req.auth?.sub;
-    if (!leaderId) return res.status(401).json({ error: "Unauthorized" });
+      if (!Array.isArray(participantIds)) {
+        return res
+          .status(400)
+          .json({ error: "Danh sách thành viên phải là mảng" });
+      }
 
-    const { participantIds, groupName } = req.body;
-    
-    if (!Array.isArray(participantIds)) {
-      return res.status(400).json({ error: "Danh sách thành viên phải là mảng" });
+      const result = await conversationService.createGroupConversation(
+        leaderId,
+        participantIds,
+        groupName
+      );
+
+      return res.status(201).json(result);
+    } catch (error: any) {
+      console.error("Lỗi tạo nhóm:", error);
+      return res.status(500).json({ error: error.message });
     }
-
-    const result = await conversationService.createGroupConversation(
-      leaderId,
-      participantIds,
-      groupName
-    );
-
-    return res.status(201).json(result);
-  } catch (error: any) {
-    console.error("Lỗi tạo nhóm:", error);
-    return res.status(500).json({ error: error.message });
   }
-});
+);
 
-router.get("/my-groups/:userId", authenticateJWT, async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.params;
-    if (!userId) return res.status(400).json({ error: "UserId là bắt buộc" });
+router.get(
+  "/my-groups/:userId",
+  authenticateJWT,
+  async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      if (!userId) return res.status(400).json({ error: "UserId là bắt buộc" });
 
-    const groups = await conversationService.getConversationsOfUser(userId);
-    return res.status(200).json(groups);
-  } catch (error: any) {
-    console.error("Lỗi khi lấy nhóm:", error);
-    return res.status(500).json({ error: error.message });
+      const groups = await conversationService.getConversationsOfUser(userId);
+      return res.status(200).json(groups);
+    } catch (error: any) {
+      console.error("Lỗi khi lấy nhóm:", error);
+      return res.status(500).json({ error: error.message });
+    }
   }
-});
+);
 
-// // Thêm người dùng vào nhóm chat
-// router.post(
-//   "/add-users",
-//   async (req: Request & { auth?: any }, res: Response) => {
-//     try {
-//       const currentUserId = req.auth?.sub;
-//       if (!currentUserId) {
-//         return res
-//           .status(401)
-//           .json({ error: "Không được phép: Thiếu xác thực người dùng" });
-//       }
-//       const { conversationId, newUserIds } = req.body;
+// Thêm thành viên vào nhóm chat
+router.put(
+  "/add-users/:conversationId",
+  authenticateJWT,
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const currentUserId = req.auth?.sub;
+      const { conversationId } = req.params;
+      const { newUserIds } = req.body;
 
-//       if (
-//         !conversationId ||
-//         !currentUserId ||
-//         !newUserIds ||
-//         !Array.isArray(newUserIds)
-//       ) {
-//         return res
-//           .status(400)
-//           .json({ error: "Thiếu hoặc dữ liệu không hợp lệ" });
-//       }
+      if (!currentUserId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
 
-//       const result = await conversationService.addUsersToGroup(
-//         conversationId,
-//         currentUserId,
-//         newUserIds
-//       );
+      if (!conversationId) {
+        return res
+          .status(400)
+          .json({ error: "conversationId must be provided" });
+      }
 
-//       res.json(result);
-//     } catch (error: any) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   }
-// );
+      if (!newUserIds || !Array.isArray(newUserIds)) {
+        return res
+          .status(400)
+          .json({ error: "newUserIds must be a non-empty array" });
+      }
+
+      const updatedConversation = await conversationService.addUsersToGroup(
+        conversationId,
+        currentUserId,
+        newUserIds
+      );
+
+      res.json({
+        message: "Thêm thành viên thành công",
+        conversation: updatedConversation,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 // // Tìm các nhóm chung giữa hai người dùng
 // router.get(
@@ -122,58 +137,90 @@ router.get("/my-groups/:userId", authenticateJWT, async (req: Request, res: Resp
 //     }
 //   }
 // );
-// router.get(
-//   "/:conversationId",
-//   async (req: Request & { auth?: any }, res: Response) => {
-//     try {
-//       const currentUserId = req.auth?.sub; // Lấy currentUserId từ auth
-//       const { conversationId } = req.params; // Lấy conversationId từ params
+router.get(
+  "/:conversationId",
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const currentUserId = req.auth?.sub; // Lấy currentUserId từ auth
+      const { conversationId } = req.params; // Lấy conversationId từ params
 
-//       if (!currentUserId) {
-//         return res
-//           .status(401)
-//           .json({ error: "Không được phép: Thiếu xác thực người dùng" });
-//       }
+      if (!currentUserId) {
+        return res
+          .status(401)
+          .json({ error: "Không được phép: Thiếu xác thực người dùng" });
+      }
 
-//       if (!conversationId) {
-//         return res.status(400).json({ error: "Thiếu conversationId" });
-//       }
+      if (!conversationId) {
+        return res.status(400).json({ error: "Thiếu conversationId" });
+      }
 
-//       const conversation = await conversationService.getConversationById(
-//         conversationId,
-//         currentUserId
-//       );
-//       res.json(conversation);
-//     } catch (error: any) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   }
-// ),
-//   router.get(
-//     "/:conversationId",
-//     async (req: Request & { auth?: any }, res: Response) => {
-//       try {
-//         const currentUserId = req.auth?.sub; // Lấy currentUserId từ auth
-//         const { conversationId } = req.params; // Lấy conversationId từ params
+      const conversation = await conversationService.getConversationById(
+        conversationId,
+        currentUserId
+      );
+      res.json(conversation);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
-//         if (!currentUserId) {
-//           return res
-//             .status(401)
-//             .json({ error: "Không được phép: Thiếu xác thực người dùng" });
-//         }
+// Rời khỏi nhóm chat
+router.put(
+  "/leave/:conversationId",
+  authenticateJWT,
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const userId = req.auth?.sub;
+      const { conversationId } = req.params;
 
-//         if (!conversationId) {
-//           return res.status(400).json({ error: "Thiếu conversationId" });
-//         }
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
 
-//         const conversation = await conversationService.getConversationById(
-//           conversationId,
-//           currentUserId
-//         );
-//         res.json(conversation);
-//       } catch (error: any) {
-//         res.status(500).json({ error: error.message });
-//       }
-//     }
-//   );
+      if (!conversationId) {
+        return res
+          .status(400)
+          .json({ error: "conversationId must be provided" });
+      }
+
+      await conversationService.leaveGroup(conversationId, userId);
+
+      res.json({ message: "Rời nhóm thành công" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+// Xóa nhóm chat (chỉ trưởng nhóm mới có quyền)
+router.delete(
+  "/delete/:conversationId",
+  authenticateJWT,
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const currentUserId = req.auth?.sub;
+      const { conversationId } = req.params;
+
+      if (!currentUserId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
+
+      if (!conversationId) {
+        return res
+          .status(400)
+          .json({ error: "conversationId must be provided" });
+      }
+
+      await conversationService.deleteGroup(conversationId, currentUserId);
+
+      res.json({ message: "Xóa nhóm thành công" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 export default router;

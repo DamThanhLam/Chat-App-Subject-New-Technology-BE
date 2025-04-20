@@ -5,6 +5,7 @@ import {
   UpdateCommand,
   UpdateCommandInput,
   ScanCommand,
+  DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { Conversation, createConversationModel } from "../models/Conversation";
@@ -23,9 +24,9 @@ export const createConversation = async (
   groupName: string = "Nhóm mới"
 ): Promise<Conversation> => {
   const uniqueParticipants = Array.from(new Set([leaderId, ...participantIds]));
-  const participants = uniqueParticipants.map(id => ({
+  const participants = uniqueParticipants.map((id) => ({
     id,
-    method: "normal"
+    method: "normal",
   }));
 
   const conversation: Conversation = {
@@ -41,24 +42,28 @@ export const createConversation = async (
     parentMessage: null,
     linkJoin: "",
     listBlock: [],
-    permission: { 
-      acceptJoin: true, 
-      chat: true 
+    permission: {
+      acceptJoin: true,
+      chat: true,
     },
     requestJoin: [],
-    avatarUrl: ""
+    avatarUrl: "",
   };
 
-  await docClient.send(new PutCommand({
-    TableName: TABLE_NAME,
-    Item: conversation
-  }));
+  await docClient.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: conversation,
+    })
+  );
 
   return conversation;
 };
 
 // Hàm lấy danh sách nhóm theo userId (sử dụng participantsIds)
-export const getConversationsByUserId = async (userId: string): Promise<Conversation[]> => {
+export const getConversationsByUserId = async (
+  userId: string
+): Promise<Conversation[]> => {
   try {
     const command = new ScanCommand({
       TableName: TABLE_NAME,
@@ -76,8 +81,9 @@ export const getConversationsByUserId = async (userId: string): Promise<Conversa
   }
 };
 
-
-export const saveConversation = async (conversation: Conversation): Promise<void> => {
+export const saveConversation = async (
+  conversation: Conversation
+): Promise<void> => {
   const command = new PutCommand({
     TableName: TABLE_NAME,
     Item: conversation,
@@ -87,7 +93,9 @@ export const saveConversation = async (conversation: Conversation): Promise<void
 };
 
 // Hàm lấy các nhóm mà người dùng đã gia nhập
-export const getConversationsByUser = async (userId: string): Promise<Conversation[]> => {
+export const getConversationsByUser = async (
+  userId: string
+): Promise<Conversation[]> => {
   const command = new ScanCommand({
     TableName: TABLE_NAME,
     FilterExpression: "contains(participants, :userId)",
@@ -100,47 +108,28 @@ export const getConversationsByUser = async (userId: string): Promise<Conversati
   return Items as Conversation[];
 };
 
-export const joinedGroup = async(conversationId: string, userId: string)=>{
-  const command =new GetCommand({
+export const joinedGroup = async (conversationId: string, userId: string) => {
+  const command = new GetCommand({
     TableName: TABLE_NAME,
-    Key:{id:conversationId}
-  })
-  const response = docClient.send(command)
-  const conversation = (await response).Item as Conversation
-  if(conversation.participants.filter(item=>item.id === userId)) return true
-  return false
-}
+    Key: { id: conversationId },
+  });
+  const response = docClient.send(command);
+  const conversation = (await response).Item as Conversation;
+  if (conversation.participants.filter((item) => item.id === userId))
+    return true;
+  return false;
+};
 
-export const getPermission = async(conversationId: string)=>{
-  const command =new GetCommand({
+export const getPermission = async (conversationId: string) => {
+  const command = new GetCommand({
     TableName: TABLE_NAME,
-    Key:{id:conversationId}
-  })
-  const response = docClient.send(command)
-  const conversation = (await response).Item as Conversation
-  if(!conversation) return null;
+    Key: { id: conversationId },
+  });
+  const response = docClient.send(command);
+  const conversation = (await response).Item as Conversation;
+  if (!conversation) return null;
   return conversation.permission;
-}
-// Tạo cuộc trò chuyện mới
-// export const createConversation = async (
-//   participants: string[],
-//   groupName?: string
-// ): Promise<string> => {
-//   const conversationId = uuidv4();
-//   const conversation: Conversation = createConversationModel(
-//     participants,
-//     groupName,
-//     conversationId
-//   );
-
-//   const command = new PutCommand({
-//     TableName: TABLE_NAME,
-//     Item: conversation,
-//   });
-
-//   await docClient.send(command);
-//   return conversationId;
-// };
+};
 
 // Lấy thông tin cuộc trò chuyện
 export const getConversation = async (
@@ -162,11 +151,7 @@ export const update = async (conversation: Conversation) => {
   // 1. Tạo các expression từ object conversation
   //    - Bỏ qua id vì là key
   //    - Đổi createAt thành N (number) nếu cần, hoặc giữ string
-  const {
-    id,
-    createAt,
-    ...fieldsToUpdate
-  } = conversation;
+  const { id, createAt, ...fieldsToUpdate } = conversation;
 
   // 2. Xây dựng UpdateExpression và ExpressionAttributeValues
   const setExpressions: string[] = [];
@@ -210,39 +195,69 @@ export const update = async (conversation: Conversation) => {
   // 5. Trả về item mới
   return response.Attributes as Conversation;
 };
-export const getConversationByLink= async(link:string)=>{
+export const getConversationByLink = async (link: string) => {
   const command = new ScanCommand({
     TableName: TABLE_NAME,
-    ExpressionAttributeValues:{
-      ":link":link
+    ExpressionAttributeValues: {
+      ":link": link,
     },
-    FilterExpression:":link = link"
-  })
-  const item = (await docClient.send(command)).Items?.at(0)
-  return item as Conversation
-}
-export const getAllConversationId = async()=>{
-  const command = new ScanCommand({TableName:TABLE_NAME})
-  const listConversationId = (await docClient.send(command)).Items?.map(item=>{return item.id})
-  return listConversationId
-}
-// Cập nhật người tham gia cuộc trò chuyện
+    FilterExpression: ":link = link",
+  });
+  const item = (await docClient.send(command)).Items?.at(0);
+  return item as Conversation;
+};
+export const getAllConversationId = async () => {
+  const command = new ScanCommand({ TableName: TABLE_NAME });
+  const listConversationId = (await docClient.send(command)).Items?.map(
+    (item) => {
+      return item.id;
+    }
+  );
+  return listConversationId;
+};
+
 export const addUsersToConversation = async (
   conversationId: string,
   newUserIds: string[]
 ): Promise<Conversation> => {
   const now = new Date().toISOString();
 
+  // Lấy thông tin cuộc trò chuyện hiện tại
+  const conversation = await getConversation(conversationId);
+  if (!conversation) {
+    throw new Error("Cuộc trò chuyện không tồn tại");
+  }
+
+  // Lấy danh sách participants hiện tại
+  const currentParticipants = conversation.participants || [];
+  const currentParticipantIds = conversation.participantsIds || [];
+
+  // Loại bỏ các userId đã có trong nhóm và chuẩn bị danh sách mới
+  const participantsToAdd = newUserIds
+    .filter((userId) => !currentParticipantIds.includes(userId))
+    .map((userId) => ({
+      id: userId,
+      method: "normal", // Có thể thay đổi method nếu cần
+    }));
+
+  const updatedParticipants = [...currentParticipants, ...participantsToAdd];
+  const updatedParticipantIds = [
+    ...currentParticipantIds,
+    ...newUserIds.filter((userId) => !currentParticipantIds.includes(userId)),
+  ];
+
   const command = new UpdateCommand({
     TableName: TABLE_NAME,
     Key: { id: conversationId },
-    UpdateExpression: "set participants = :participants, updateAt = :updateAt",
+    UpdateExpression:
+      "set participants = :participants, participantsIds = :participantsIds, updatedAt = :updatedAt",
     ExpressionAttributeValues: {
-      ":participants": newUserIds,
-      ":updateAt": now,
+      ":participants": updatedParticipants,
+      ":participantsIds": updatedParticipantIds,
+      ":updatedAt": now,
     },
     ConditionExpression: "attribute_exists(id)", // Chỉ kiểm tra cuộc trò chuyện tồn tại
-    ReturnValues: "UPDATED_NEW",
+    ReturnValues: "ALL_NEW",
   });
 
   const result = await docClient.send(command);
@@ -267,4 +282,67 @@ export const findCommonGroups = async (
     },
   };
   return paginateScan<Conversation>(docClient, params, page, limit);
+};
+
+// Xóa một người dùng khỏi nhóm chat
+export const removeUserFromConversation = async (
+  conversationId: string,
+  userId: string,
+  newLeaderId?: string
+): Promise<Conversation> => {
+  const now = new Date().toISOString();
+
+  // Lấy thông tin cuộc trò chuyện hiện tại
+  const conversation = await getConversation(conversationId);
+  if (!conversation) {
+    throw new Error("Cuộc trò chuyện không tồn tại");
+  }
+
+  // Lọc bỏ người dùng khỏi participants và participantsIds
+  const updatedParticipants = (conversation.participants || []).filter(
+    (participant) => participant.id !== userId
+  );
+  const updatedParticipantIds = (conversation.participantsIds || []).filter(
+    (id) => id !== userId
+  );
+
+  const updateExpressionParts = [
+    "set participants = :participants, participantsIds = :participantsIds, updatedAt = :updatedAt",
+  ];
+  const expressionValues: Record<string, any> = {
+    ":participants": updatedParticipants,
+    ":participantsIds": updatedParticipantIds,
+    ":updatedAt": now,
+  };
+
+  // Nếu cần cập nhật leaderId (trường hợp người rời là trưởng nhóm)
+  if (newLeaderId) {
+    updateExpressionParts.push("leaderId = :newLeaderId");
+    expressionValues[":newLeaderId"] = newLeaderId;
+  }
+
+  const command = new UpdateCommand({
+    TableName: TABLE_NAME,
+    Key: { id: conversationId },
+    UpdateExpression: updateExpressionParts.join(", "),
+    ExpressionAttributeValues: expressionValues,
+    ConditionExpression: "attribute_exists(id)",
+    ReturnValues: "ALL_NEW",
+  });
+
+  const result = await docClient.send(command);
+  return result.Attributes as Conversation;
+};
+
+// Xóa nhóm chat (khi không còn thành viên)
+export const deleteConversation = async (
+  conversationId: string
+): Promise<void> => {
+  const command = new DeleteCommand({
+    TableName: TABLE_NAME,
+    Key: { id: conversationId },
+    ConditionExpression: "attribute_exists(id)",
+  });
+
+  await docClient.send(command);
 };

@@ -159,4 +159,32 @@ router.get("/media", async (req: Request & { auth?: any }, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Lấy danh sách tin nhắn chat nhóm (dùng conversationId)
+router.get("/group", async (req: Request & { auth?: any }, res: Response) => {
+  try {
+    const userId = req.auth?.sub;
+    const conversationId = req.query.conversationId as string;
+    const exclusiveStartKey = (req.query.exclusiveStartKey as string) || "";
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ error: "Unauthorized: Missing user authentication" });
+    }
+
+    if (!conversationId) {
+      return res.status(400).json({ error: "conversationId must be provided" });
+    }
+
+    const messages = await messageService.getByConversationId(
+      conversationId,
+      userId,
+      exclusiveStartKey
+    );
+
+    res.json(messages);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 export { router as messageRoute };
