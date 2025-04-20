@@ -29,7 +29,15 @@ export const createConversation = async (
     method: leaderId,
   }));
   console.log(uniqueParticipants)
+  const totalUniqueMembers = new Set([leaderId, ...participantIds]);
 
+  if (totalUniqueMembers.size < 3) {
+    throw new Error("Nhóm phải có ít nhất 3 thành viên (bao gồm trưởng nhóm)");
+  }
+
+  if (!groupName || groupName.trim() === "") {
+    throw new Error("Tên nhóm không được để trống");
+  }
   const conversation: Conversation = {
     id: uuidv4().toString(),
     participants,
