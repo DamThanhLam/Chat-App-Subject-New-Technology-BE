@@ -12,7 +12,7 @@ import groupChatRoutes from './routes/group-chat-routes';
 import { groupRoutes } from "./routes/groupRoutes";
 import { userRoutes } from "./routes/userRoutes";
 import nicknameRoutes from "./routes/nickNamRoutes";
-import conversationRoutes from "./routes/conversationRoutes";
+// import conversationRoutes from "./routes/conversationRoutes";
 import { expressjwt } from "express-jwt";
 import { authenticateJWT } from "./middelwares/authenticateJWT";
 import { messageRoute } from "./routes/messageRoute";
@@ -71,7 +71,7 @@ app.use((req, res, next) => {
 app.use('/api/user', authenticateJWT, userRoutes)
 app.use("/api/friends", authenticateJWT, friendRoutes);
 app.use("/api/nickname", authenticateJWT, nicknameRoutes);
-app.use("/api/conversation", authenticateJWT, conversationRoutes);
+// app.use("/api/conversation", authenticateJWT, conversationRoutes);
 app.use("/api/message", authenticateJWT, messageRoute);
 app.use("/api/friends", authenticateJWT, friendRoutes);
 // Socket.IO
