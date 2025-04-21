@@ -62,9 +62,7 @@ app.use((req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const token = authHeader.split(" ")[1]; // Bearer <token>
-    console.log("👉 JWT Token:", token);
   } else {
-    console.warn("⚠️ No Authorization header found.");
   }
   next();
 });

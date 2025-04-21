@@ -7,8 +7,9 @@ import {
   ScanCommand,
   DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { unmarshall } from "@aws-sdk/util-dynamodb";
 import { v4 as uuidv4 } from "uuid";
-import { Conversation, createConversationModel } from "../models/Conversation";
+import { Conversation } from "../models/Conversation";
 import { dynamoDBClient } from "../config/aws-config";
 import { paginateScan } from "../utils/pagination";
 
@@ -157,36 +158,38 @@ export const getConversation = async (
  * Cập nhật Conversation vào DynamoDB
  */
 export const update = async (conversation: Conversation) => {
-  // 1. Tạo các expression từ object conversation
-  //    - Bỏ qua id vì là key
-  //    - Đổi createAt thành N (number) nếu cần, hoặc giữ string
   const { id, createAt, ...fieldsToUpdate } = conversation;
 
-  // 2. Xây dựng UpdateExpression và ExpressionAttributeValues
   const setExpressions: string[] = [];
   const expressionValues: Record<string, any> = {};
+  const expressionNames: Record<string, string> = {};
 
+  // Xử lý các trường cần cập nhật
   Object.entries(fieldsToUpdate).forEach(([key, value]) => {
-    // Chỉ cập nhật những trường không undefined
     if (value !== undefined) {
       const placeholder = `:${key}`;
-      setExpressions.push(`#${key} = ${placeholder}`);
+      const namePlaceholder = `#${key}`;
+      setExpressions.push(`${namePlaceholder} = ${placeholder}`);
       expressionValues[placeholder] = value;
+      expressionNames[namePlaceholder] = key;
     }
   });
 
-  // Luôn cập nhật updateAt
-  setExpressions.push(`#updateAt = :updateAt`);
+  // Thêm updateAt vào danh sách cập nhật
+  const updateAtPlaceholder = "#updateAt";
+  setExpressions.push(`${updateAtPlaceholder} = :updateAt`);
   expressionValues[":updateAt"] = new Date().toISOString();
+  expressionNames[updateAtPlaceholder] = "updateAt";
+
+  if (setExpressions.length === 0) {
+    throw new Error("No fields to update");
+  }
 
   const UpdateExpression = `SET ${setExpressions.join(", ")}`;
 
-  // 3. Định nghĩa ExpressionAttributeNames để tránh reserved keywords
-  const expressionNames = Object.keys(fieldsToUpdate).reduce(
-    (acc, key) => ({ ...acc, [`#${key}`]: key }),
-    {} as Record<string, string>
-  );
-  expressionNames["#updateAt"] = "updateAt";
+  console.log("UpdateExpression:", UpdateExpression);
+  console.log("ExpressionAttributeNames:", expressionNames);
+  console.log("ExpressionAttributeValues:", expressionValues);
 
   const params: UpdateCommandInput = {
     TableName: TABLE_NAME,
@@ -194,15 +197,44 @@ export const update = async (conversation: Conversation) => {
     UpdateExpression,
     ExpressionAttributeNames: expressionNames,
     ExpressionAttributeValues: expressionValues,
-    ReturnValues: "ALL_NEW", // Trả về item sau khi cập nhật
+    ReturnValues: "ALL_NEW",
   };
 
-  // 4. Gửi lệnh UpdateCommand
-  const command = new UpdateCommand(params);
-  const response = await client.send(command);
+  try {
+    const command = new UpdateCommand(params);
+    const response = await docClient.send(command);
+    console.log("Updated conversation:", response.Attributes);
+    return response.Attributes as Conversation;
+  } catch (error) {
+    console.error("Error updating conversation:", error);
+    throw error;
+  }
+};
 
-  // 5. Trả về item mới
-  return response.Attributes as Conversation;
+export const updateGroupName = async (
+  conversation: Conversation
+): Promise<Conversation> => {
+  // Đảm bảo tất cả các trường cần thiết đều có trong conversation
+  const updatedConversation = {
+    ...conversation,
+    updateAt: new Date().toISOString(), // Luôn cập nhật updateAt
+  };
+
+  console.log("Conversation before saving:", updatedConversation);
+
+  const command = new PutCommand({
+    TableName: TABLE_NAME,
+    Item: updatedConversation,
+  });
+
+  try {
+    await docClient.send(command);
+    console.log("Conversation updated successfully:", updatedConversation);
+    return updatedConversation;
+  } catch (error) {
+    console.error("Error updating conversation:", error);
+    throw error;
+  }
 };
 export const getConversationByLink = async (link: string) => {
   const command = new ScanCommand({
@@ -354,4 +386,74 @@ export const deleteConversation = async (
   });
 
   await docClient.send(command);
+};
+
+export const searchMessagesByConversation = async (
+  conversationId: string,
+  userId: string,
+  keyword: string
+): Promise<{ messages: any[]; lastEvaluatedKey?: string }> => {
+  try {
+    const normalizedKeyword = keyword.toLowerCase();
+
+    // Lấy tất cả tin nhắn trong nhóm với conversationId
+    const params: any = {
+      TableName: TABLE_NAME,
+      ExpressionAttributeValues: {
+        ":conversationId": { S: conversationId },
+        ":userId": { S: userId },
+      },
+      FilterExpression:
+        "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
+      ScanIndexForward: false,
+    };
+
+    const command = new ScanCommand(params);
+    const response = await docClient.send(command);
+
+    // Log dữ liệu thô từ DynamoDB
+    console.log("Raw response.Items:", response.Items);
+
+    if (!response.Items || !Array.isArray(response.Items)) {
+      console.warn(
+        "No messages found for conversationId:",
+        conversationId,
+        "and userId:",
+        userId
+      );
+      return { messages: [], lastEvaluatedKey: undefined };
+    }
+
+    // Chuẩn hóa tin nhắn và lọc theo từ khóa
+    const messages = response.Items.map((item) => unmarshall(item))
+      .filter((message) => {
+        // Kiểm tra message có tồn tại và là string không
+        if (!message || typeof message.message !== "string") {
+          console.warn("Invalid message or message content:", message);
+          return false;
+        }
+
+        // Chuẩn hóa nội dung tin nhắn (chuyển thành chữ thường)
+        const normalizedMessage = message.message.toLowerCase();
+        console.log("Normalized message:", normalizedMessage);
+
+        return normalizedMessage.includes(normalizedKeyword);
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+    console.log("Messages found:", messages);
+
+    return {
+      messages,
+      lastEvaluatedKey: response.LastEvaluatedKey
+        ? JSON.stringify(response.LastEvaluatedKey)
+        : undefined,
+    };
+  } catch (error: any) {
+    console.error("Error in searchMessagesByConversation:", error);
+    throw new Error(`Failed to search group messages: ${error.message}`);
+  }
 };

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import * as conversationService from "../services/ConversationService";
 import { authenticateJWT } from "../middelwares/authenticateJWT";
+import { searchMessagesByConversation } from "../repository/ConversationRepository";
 
 const router = Router();
 
@@ -218,6 +219,43 @@ router.delete(
       await conversationService.deleteGroup(conversationId, currentUserId);
 
       res.json({ message: "Xóa nhóm thành công" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+router.get(
+  "/search-group",
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const userId = req.auth?.sub;
+      const { conversationId, keyword } = req.query;
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
+
+      if (!conversationId || !keyword) {
+        return res.status(400).json({
+          error: "Missing required fields: conversationId or keyword",
+        });
+      }
+
+      if (typeof conversationId !== "string" || typeof keyword !== "string") {
+        return res.status(400).json({
+          error: "conversationId and keyword must be strings",
+        });
+      }
+
+      const result = await searchMessagesByConversation(
+        conversationId,
+        userId,
+        keyword
+      );
+      res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

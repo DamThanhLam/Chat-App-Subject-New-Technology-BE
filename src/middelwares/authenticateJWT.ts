@@ -67,7 +67,6 @@ export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void
     },
     (err, decoded) => {
       if (err) {
-        console.error("JWT verification failed:", err);
         return next(new Error("Authentication error"));
       }
 
