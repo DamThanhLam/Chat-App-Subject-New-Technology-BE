@@ -32,10 +32,10 @@ export class UserRepository {
   async findUserId(id: string) {
     const command = new GetCommand({
       TableName: TABLE_NAME,
-      Key: { id: id }
-    })
-    const user = (await docClient.send(command)).Item as User
-    return user.name
+      Key: { id: id },
+    });
+    const user = (await docClient.send(command)).Item;
+    return user;
   }
 
   async getUsers(): Promise<User[]> {
@@ -128,23 +128,23 @@ export class UserRepository {
       TableName: TABLE_NAME,
       FilterExpression: "email = :email", // so sánh tuyệt đối
       ExpressionAttributeValues: {
-        ":email": email
-      }
+        ":email": email,
+      },
     });
 
     try {
       const result = await docClient.send(params);
       console.log("Scan result:", result);
-      return result.Items?.map(user => ({
-        ...user,
-        createdAt: new Date(user.createdAt),
-        updatedAt: new Date(user.updatedAt)
-      })) as User[] || [];
+      return (
+        (result.Items?.map((user) => ({
+          ...user,
+          createdAt: new Date(user.createdAt),
+          updatedAt: new Date(user.updatedAt),
+        })) as User[]) || []
+      );
     } catch (error) {
       console.error("Error querying DynamoDB:", error);
       throw new Error("Error querying DynamoDB");
     }
   }
-
-
 }

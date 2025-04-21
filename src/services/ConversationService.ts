@@ -2,6 +2,7 @@
 import * as conversationRepository from "../repository/ConversationRepository";
 import { Conversation } from "../models/Conversation";
 import { UserRepository } from "../repository/UserRepository";
+import { log } from "node:console";
 // Removed unused import
 const userRepository = new UserRepository();
 
@@ -433,6 +434,7 @@ export const deleteGroup = async (
           await userRepository.updateUser(userId, {
             listConversation: updatedListConversation,
           });
+          console.log("updatedListConversation", updatedListConversation);
         }
       })
     );
@@ -441,5 +443,53 @@ export const deleteGroup = async (
     await conversationRepository.deleteConversation(conversationId);
   } catch (error: any) {
     throw new Error(`Không thể xóa nhóm: ${error.message}`);
+  }
+};
+
+export const renameGroup = async (
+  conversationId: string,
+  newName: string
+): Promise<void> => {
+  try {
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    conversation.groupName = newName;
+
+    await conversationRepository.updateGroupName(conversation);
+  } catch (error: any) {
+    console.error("Error updating group name:", error);
+    throw error; // Hoặc xử lý lỗi tùy theo yêu cầu
+  }
+};
+
+export const searchMesageByConversation = async (
+  conversationId: string,
+  userId: string,
+  keyword: string
+): Promise<{ messages: any[] }> => {
+  try {
+    if (!conversationId || !userId || !keyword) {
+      throw new Error(
+        "Missing required fields: conversationId, userId, or keyword"
+      );
+    }
+
+    const result = await conversationRepository.searchMessagesByConversation(
+      conversationId,
+      userId,
+      keyword
+    );
+
+    return {
+      messages: result.messages,
+    };
+  } catch (error: any) {
+    throw new Error(`Failed to search group messages: ${error.message}`);
   }
 };

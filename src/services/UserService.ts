@@ -39,7 +39,8 @@ export class UserService {
   async checkBeforeRegister(user: User): Promise<boolean> {
     const users = await this.userRepository.getUsers();
     const isDuplicate = users.some(
-      (item) => item.email === user.email || item.phoneNumber === user.phoneNumber
+      (item) =>
+        item.email === user.email || item.phoneNumber === user.phoneNumber
     );
     return !isDuplicate;
   }
@@ -56,7 +57,10 @@ export class UserService {
     return updatedUser;
   }
 
-  async createInviteLink(groupId: string, expiresInDays: number = 7): Promise<string> {
+  async createInviteLink(
+    groupId: string,
+    expiresInDays: number = 7
+  ): Promise<string> {
     const group = await this.groupRepository.getGroupById(groupId);
     if (!group) {
       throw new Error("Group not found");
@@ -74,14 +78,18 @@ export class UserService {
       expiresAt,
     };
 
-    const createdLink = await this.inviteLinkRepository.createInviteLink(inviteLink);
+    const createdLink = await this.inviteLinkRepository.createInviteLink(
+      inviteLink
+    );
     await this.groupRepository.addInviteLinkToGroup(groupId, createdLink.id!);
 
     return link;
   }
 
   async joinGroupWithLink(link: string, userId: string): Promise<string> {
-    const inviteLink = await this.inviteLinkRepository.getInviteLinkByLink(link);
+    const inviteLink = await this.inviteLinkRepository.getInviteLinkByLink(
+      link
+    );
     if (!inviteLink) {
       throw new Error("Invalid invite link");
     }
@@ -113,7 +121,7 @@ export class UserService {
     }
     return await this.userRepository.findUsersByEmail(email);
   }
-  async getUserName(id: string){
+  async getUserName(id: any) {
     return await this.userRepository.findUserId(id);
   }
 }
