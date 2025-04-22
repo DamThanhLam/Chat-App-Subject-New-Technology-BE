@@ -1,7 +1,6 @@
 import { Router, Request, Response } from "express";
 import * as conversationService from "../services/ConversationService";
 import { authenticateJWT } from "../middelwares/authenticateJWT";
-import { searchMessagesByConversation } from "../repository/ConversationRepository";
 
 const router = Router();
 
@@ -145,15 +144,15 @@ router.get(
       const currentUserId = req.auth?.sub; // Lấy currentUserId từ auth
       const { conversationId } = req.params; // Lấy conversationId từ params
 
-//       if (!currentUserId) {
-//         return res
-//           .status(401)
-//           .json({ error: "Không được phép: Thiếu xác thực người dùng" });
-//       }
+      //       if (!currentUserId) {
+      //         return res
+      //           .status(401)
+      //           .json({ error: "Không được phép: Thiếu xác thực người dùng" });
+      //       }
 
-//       if (!conversationId) {
-//         return res.status(400).json({ error: "Thiếu conversationId" });
-//       }
+      //       if (!conversationId) {
+      //         return res.status(400).json({ error: "Thiếu conversationId" });
+      //       }
 
       const conversation = await conversationService.getConversationById(
         conversationId,
@@ -225,40 +224,4 @@ router.delete(
   }
 );
 
-router.get(
-  "/search-group",
-  async (req: Request & { auth?: any }, res: Response) => {
-    try {
-      const userId = req.auth?.sub;
-      const { conversationId, keyword } = req.query;
-
-      if (!userId) {
-        return res
-          .status(401)
-          .json({ error: "Unauthorized: Missing user authentication" });
-      }
-
-      if (!conversationId || !keyword) {
-        return res.status(400).json({
-          error: "Missing required fields: conversationId or keyword",
-        });
-      }
-
-      if (typeof conversationId !== "string" || typeof keyword !== "string") {
-        return res.status(400).json({
-          error: "conversationId and keyword must be strings",
-        });
-      }
-
-      const result = await searchMessagesByConversation(
-        conversationId,
-        userId,
-        keyword
-      );
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  }
-);
 export default router;

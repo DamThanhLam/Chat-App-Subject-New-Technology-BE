@@ -187,4 +187,103 @@ router.get("/group", async (req: Request & { auth?: any }, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+router.get(
+  "/search-group",
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const userId = req.auth?.sub;
+      const { conversationId, keyword } = req.query;
+      console.log("conversationId", conversationId);
+      console.log("keyword", keyword);
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
+
+      if (!conversationId || !keyword) {
+        return res.status(400).json({
+          error: "Missing required fields: conversationId or keyword",
+        });
+      }
+
+      if (typeof conversationId !== "string" || typeof keyword !== "string") {
+        return res.status(400).json({
+          error: "conversationId and keyword must be strings",
+        });
+      }
+
+      const result = await messageService.searchMesageByConversation(
+        conversationId,
+        userId,
+        keyword
+      );
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+// Lấy danh sách media trong nhóm
+router.get(
+  "/media-group",
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const userId = req.auth?.sub;
+      const conversationId = req.query.conversationId as string;
+      const exclusiveStartKey = req.query.exclusiveStartKey as string;
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
+
+      if (!conversationId) {
+        return res
+          .status(400)
+          .json({ error: "Missing required field: conversationId" });
+      }
+
+      const result = await messageService.getMediaMessagesByConversation(
+        conversationId,
+        userId,
+        exclusiveStartKey
+      );
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+router.delete(
+  "/mark-deleted-group-chat",
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const currentUserId = req.auth?.sub;
+      const conversationId = req.query.conversationId as string;
+
+      if (!currentUserId) {
+        return res
+          .status(401)
+          .json({ error: "Không được phép: Thiếu xác thực người dùng" });
+      }
+
+      if (!conversationId) {
+        return res.status(400).json({ error: "Thiếu conversationId" });
+      }
+
+      await messageService.markGroupChatAsDeleted(
+        currentUserId,
+        conversationId
+      );
+      res.json({ message: "Xóa lịch sử trò chuyện nhóm thành công" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 export { router as messageRoute };

@@ -28,7 +28,7 @@ export interface Conversation {
 
 // Hàm tạo Conversation mới (đã bổ sung participantsIds)
 export const createConversationModel = (
-  participants: {method: string, id: string}[],
+  participants: { method: string; id: string }[],
   groupName?: string,
   conversationId?: string,
   options?: {
@@ -37,11 +37,11 @@ export const createConversationModel = (
   }
 ): Conversation => {
   const now = new Date().toISOString();
-  
+
   return {
     id: conversationId || "",
     participants,
-    participantsIds: participants.map(p => p.id), // Tạo mảng IDs
+    participantsIds: participants.map((p) => p.id), // Tạo mảng IDs
     groupName: groupName || "",
     lastMessage: null,
     createAt: now,
@@ -51,11 +51,11 @@ export const createConversationModel = (
     leaderId: options?.leaderId || participants[0]?.id || "", // Mặc định là người đầu tiên
     linkJoin: "",
     listBlock: [],
-    permission: { 
-      acceptJoin: true, 
-      chat: true 
+    permission: {
+      acceptJoin: true,
+      chat: true,
     },
     requestJoin: [],
-    avatarUrl: options?.avatarUrl || ""
+    avatarUrl: options?.avatarUrl || "",
   };
 };

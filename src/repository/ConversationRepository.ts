@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Conversation } from "../models/Conversation";
 import { dynamoDBClient } from "../config/aws-config";
 import { paginateScan } from "../utils/pagination";
+import { MessageRepository } from "./MessageRepository";
 
 const client = dynamoDBClient;
 const docClient = DynamoDBDocumentClient.from(client);
@@ -25,11 +26,12 @@ export const createConversation = async (
   groupName: string = "Nhóm mới"
 ): Promise<Conversation> => {
   const uniqueParticipants = Array.from(new Set([leaderId, ...participantIds]));
+
   const participants = uniqueParticipants.map((id) => ({
     id,
     method: leaderId,
   }));
-  console.log(uniqueParticipants)
+  console.log(uniqueParticipants);
   const totalUniqueMembers = new Set([leaderId, ...participantIds]);
 
   if (totalUniqueMembers.size < 3) {
@@ -379,81 +381,73 @@ export const removeUserFromConversation = async (
 export const deleteConversation = async (
   conversationId: string
 ): Promise<void> => {
-  const command = new DeleteCommand({
-    TableName: TABLE_NAME,
-    Key: { id: conversationId },
-    ConditionExpression: "attribute_exists(id)",
-  });
+  try {
+    const messageRepository = new MessageRepository();
+    // Bước 1: Xóa tất cả tin nhắn liên quan đến conversationId
+    await messageRepository.deleteMessagesByConversationId(conversationId);
 
-  await docClient.send(command);
+    // Bước 2: Xóa nhóm chat
+    const command = new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: { id: conversationId },
+      ConditionExpression: "attribute_exists(id)",
+    });
+
+    await docClient.send(command);
+    console.log("Conversation deleted:", conversationId);
+  } catch (error: any) {
+    console.error("Error in deleteConversation:", error);
+    throw new Error(`Failed to delete conversation: ${error.message}`);
+  }
 };
 
-export const searchMessagesByConversation = async (
+export const updateConversation = async (
   conversationId: string,
-  userId: string,
-  keyword: string
-): Promise<{ messages: any[]; lastEvaluatedKey?: string }> => {
-  try {
-    const normalizedKeyword = keyword.toLowerCase();
+  updates: Partial<Conversation>
+): Promise<Conversation> => {
+  const now = new Date().toISOString();
 
-    // Lấy tất cả tin nhắn trong nhóm với conversationId
-    const params: any = {
-      TableName: TABLE_NAME,
-      ExpressionAttributeValues: {
-        ":conversationId": { S: conversationId },
-        ":userId": { S: userId },
-      },
-      FilterExpression:
-        "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
-      ScanIndexForward: false,
-    };
+  const setExpressions: string[] = [];
+  const expressionValues: Record<string, any> = {};
+  const expressionNames: Record<string, string> = {};
 
-    const command = new ScanCommand(params);
-    const response = await docClient.send(command);
-
-    // Log dữ liệu thô từ DynamoDB
-    console.log("Raw response.Items:", response.Items);
-
-    if (!response.Items || !Array.isArray(response.Items)) {
-      console.warn(
-        "No messages found for conversationId:",
-        conversationId,
-        "and userId:",
-        userId
-      );
-      return { messages: [], lastEvaluatedKey: undefined };
+  // Xử lý các trường cần cập nhật
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value !== undefined) {
+      const placeholder = `:${key}`;
+      const namePlaceholder = `#${key}`;
+      setExpressions.push(`${namePlaceholder} = ${placeholder}`);
+      expressionValues[placeholder] = value;
+      expressionNames[namePlaceholder] = key;
     }
+  });
 
-    // Chuẩn hóa tin nhắn và lọc theo từ khóa
-    const messages = response.Items.map((item) => unmarshall(item))
-      .filter((message) => {
-        // Kiểm tra message có tồn tại và là string không
-        if (!message || typeof message.message !== "string") {
-          console.warn("Invalid message or message content:", message);
-          return false;
-        }
+  // Luôn cập nhật trường updateAt
+  setExpressions.push("#updateAt = :updateAt");
+  expressionValues[":updateAt"] = now;
+  expressionNames["#updateAt"] = "updateAt";
 
-        // Chuẩn hóa nội dung tin nhắn (chuyển thành chữ thường)
-        const normalizedMessage = message.message.toLowerCase();
-        console.log("Normalized message:", normalizedMessage);
+  if (setExpressions.length === 0) {
+    throw new Error("No fields to update");
+  }
 
-        return normalizedMessage.includes(normalizedKeyword);
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+  const UpdateExpression = `SET ${setExpressions.join(", ")}`;
 
-    console.log("Messages found:", messages);
+  const command = new UpdateCommand({
+    TableName: TABLE_NAME,
+    Key: { id: conversationId },
+    UpdateExpression,
+    ExpressionAttributeNames: expressionNames,
+    ExpressionAttributeValues: expressionValues,
+    ConditionExpression: "attribute_exists(id)",
+    ReturnValues: "ALL_NEW",
+  });
 
-    return {
-      messages,
-      lastEvaluatedKey: response.LastEvaluatedKey
-        ? JSON.stringify(response.LastEvaluatedKey)
-        : undefined,
-    };
+  try {
+    const result = await docClient.send(command);
+    return result.Attributes as Conversation;
   } catch (error: any) {
-    console.error("Error in searchMessagesByConversation:", error);
-    throw new Error(`Failed to search group messages: ${error.message}`);
+    console.error("Error updating conversation:", error);
+    throw new Error(`Không thể cập nhật cuộc trò chuyện: ${error.message}`);
   }
 };
