@@ -138,38 +138,52 @@ export const moveQueueRequestJoinConversation = async (
   conversationId: string,
   newUserId: string,
   method: string
-) => {
+): Promise<{ message: string }> => {
   try {
+    // Kiểm tra dữ liệu đầu vào
     if (!conversationId || !newUserId || !method) {
       throw new Error("Thiếu hoặc dữ liệu không hợp lệ");
     }
 
+    // Lấy thông tin cuộc trò chuyện
     const conversation: Conversation | null =
       await conversationRepository.getConversation(conversationId);
     if (!conversation) {
       throw new Error("Không tìm thấy cuộc trò chuyện");
     }
 
+    // Lấy thông tin người dùng
     const user = await userRepository.findById(newUserId);
-
     if (!user) {
       throw new Error("Không tìm thấy người dùng");
     }
 
+    // Kiểm tra xem người dùng đã tồn tại trong danh sách yêu cầu chưa
+    const isAlreadyRequested = conversation.requestJoin.some(
+      (request) => request.id === newUserId
+    );
+    if (isAlreadyRequested) {
+      throw new Error("Người dùng đã có trong danh sách yêu cầu tham gia");
+    }
+
+    // Cập nhật danh sách yêu cầu tham gia của nhóm
     conversation.requestJoin = [
       ...conversation.requestJoin,
-      { id: newUserId, method: method },
+      { id: newUserId, userInvite: user.id } // Chỉ sử dụng các trường có trong model
     ];
 
+    // Cập nhật danh sách lời mời của người dùng
     const listInvite = user.listInvite
-      ? [...user.listInvite, { id: newUserId, method: method }]
-      : [{ id: newUserId, method: method }];
-    await userRepository.updateUser(user.id, { listInvite: listInvite });
+      ? [...user.listInvite, { id: conversationId, method }]
+      : [{ id: conversationId, method }];
 
+    // Lưu thay đổi vào cơ sở dữ liệu
+    await userRepository.updateUser(user.id, { listInvite });
     await conversationRepository.update(conversation);
 
-    return { message: "đợi chấp nhận vào nhóm thành công" };
+    return { message: "Đợi chấp nhận vào nhóm thành công" };
   } catch (error: any) {
+    console.error("Error in moveQueueRequestJoinConversation:", error.message);
     throw new Error(`Không thể thêm người dùng vào nhóm: ${error.message}`);
   }
 };
@@ -500,5 +514,96 @@ export const searchMesageByConversation = async (
     };
   } catch (error: any) {
     throw new Error(`Failed to search group messages: ${error.message}`);
+  }
+};
+
+export const toggleAcceptJoin = async (
+  conversationId: string,
+  currentUserId: string
+): Promise<Conversation> => {
+  console.log("Toggling acceptJoin for conversationId:", conversationId);
+  try {
+    const conversation = await conversationRepository.getConversation(conversationId);
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    if (conversation.leaderId !== currentUserId) {
+      throw new Error("Only the group leader can toggle acceptJoin");
+    }
+
+    const newAcceptJoin = conversation.permission.acceptJoin ? false : true;
+    console.log("New acceptJoin value:", newAcceptJoin);
+
+    const updatedConversation = await conversationRepository.updatePermission(
+      conversationId,
+      { acceptJoin: newAcceptJoin }
+    );
+
+    console.log("Updated conversation in DB:", updatedConversation);
+    return updatedConversation;
+  } catch (error: any) {
+    console.error("Error in toggleAcceptJoin:", error.message);
+    throw new Error(`Failed to toggle acceptJoin: ${error.message}`);
+  }
+};
+
+export const getApprovalStatus = async (conversationId: string): Promise<boolean> => {
+  try {
+    // Lấy thông tin nhóm từ repository
+    const conversation = await conversationRepository.getConversation(conversationId);
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    // Trả về trạng thái phê duyệt
+    return conversation.permission.acceptJoin;
+  } catch (error: any) {
+    throw new Error(`Failed to fetch approval status: ${error.message}`);
+  }
+};
+
+export const getApprovalRequests = async (
+  conversationId: string,
+  currentUserId: string
+): Promise<{ id: string; userInvite: string; userName: string }[]> => {
+  try {
+    // Lấy thông tin nhóm từ repository
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    // Kiểm tra quyền: chỉ trưởng nhóm hoặc phó nhóm mới được xem danh sách yêu cầu
+    if (
+      conversation.leaderId !== currentUserId &&
+      conversation.deputyId !== currentUserId
+    ) {
+      throw new Error("You do not have permission to view approval requests");
+    }
+
+    // Lấy danh sách yêu cầu tham gia
+    const requests = conversation.requestJoin || [];
+
+    // Lấy thông tin tên người dùng từ UserRepository
+    const detailedRequests = await Promise.all(
+      requests.map(async (request) => {
+        const user = await userRepository.findById(request.id);
+        return {
+          id: request.id,
+          userInvite: request.userInvite,
+          userName: user?.name || "Unknown User", // Trả về "Unknown User" nếu không tìm thấy
+        };
+      })
+    );
+
+    return detailedRequests;
+  } catch (error: any) {
+    console.error("Error in getApprovalRequests:", error.message);
+    throw new Error(`Failed to fetch approval requests: ${error.message}`);
   }
 };

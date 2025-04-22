@@ -457,3 +457,35 @@ export const searchMessagesByConversation = async (
     throw new Error(`Failed to search group messages: ${error.message}`);
   }
 };
+
+export const updatePermission = async (
+  conversationId: string,
+  permissionUpdate: { acceptJoin?: boolean }
+): Promise<Conversation> => {
+  console.log("Updating permission for conversationId:", conversationId);
+  console.log("Permission update payload:", permissionUpdate);
+
+  const now = new Date().toISOString();
+
+  const command = new UpdateCommand({
+    TableName: TABLE_NAME,
+    Key: { id: conversationId },
+    UpdateExpression: "SET #permission.acceptJoin = :acceptJoin, updateAt = :updateAt",
+    ExpressionAttributeNames: {
+      "#permission": "permission",
+    },
+    ExpressionAttributeValues: {
+      ":acceptJoin": permissionUpdate.acceptJoin,
+      ":updateAt": now,
+    },
+    ConditionExpression: "attribute_exists(id)",
+    ReturnValues: "ALL_NEW",
+  });
+
+  const result = await docClient.send(command);
+  console.log("Update result:", result);
+  return result.Attributes as Conversation;
+};
+
+
+

@@ -12,7 +12,7 @@ export interface Conversation {
   updateAt: string;
   parentMessage: any;
   requestJoin: {
-    method: string;
+    userInvite: string;
     id: string;
   }[];
   linkJoin: string;

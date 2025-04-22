@@ -740,5 +740,52 @@ export function socketHandler(io: Server) {
     //     }
     //   }
     // })
+    socket.on("get-approval-status", async (conversationId: string) => {
+      console.log("Received get-approval-status event for conversationId:", conversationId);
+      try {
+        const conversation = await getConversation(conversationId);
+        if (!conversation) {
+          console.log("Conversation not found:", conversationId);
+          socket.emit("error", { error: "Conversation not found", code: 404 });
+          return;
+        }
+        socket.emit("approval-status", {
+          conversationId,
+          isApprovalRequired: conversation.permission.acceptJoin,
+        });
+      } catch (error: any) {
+        console.error("Error fetching approval status:", error.message);
+        socket.emit("error", { error: error.message || "Failed to fetch approval status", code: 500 });
+      }
+    });
+
+    socket.on("toggle-approval", async (data: { conversationId: string; isApprovalRequired: boolean }) => {
+      console.log("Received toggle-approval event for conversationId:", data.conversationId);
+      try {
+        const user = (socket as any).user;
+        if (!user) {
+          console.log("User not authenticated for toggle-approval");
+          socket.emit("error", { error: "User not authenticated", code: 401 });
+          return;
+        }
+    
+        console.log("User authenticated:", user.sub);
+    
+        const updatedConversation = await conversationService.toggleAcceptJoin(
+          data.conversationId,
+          user.sub
+        );
+    
+        console.log("Updated conversation:", updatedConversation);
+    
+        io.to(data.conversationId).emit("approval-status-updated", {
+          conversationId: data.conversationId,
+          isApprovalRequired: updatedConversation.permission.acceptJoin,
+        });
+      } catch (error: any) {
+        console.error("Error toggling approval status:", error.message);
+        socket.emit("error", { error: error.message || "Failed to toggle approval status", code: 500 });
+      }
+    });
   });
 }
