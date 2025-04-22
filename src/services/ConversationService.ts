@@ -21,15 +21,15 @@ export const createGroupConversation = async (
     participantIds,
     groupName
   );
-  participantIds.map(async(item) => {
-    const user = await userRepository.findById(item)
-    if(!user) return
+  participantIds.map(async (item) => {
+    const user = await userRepository.findById(item);
+    if (!user) return;
     if (!user.listConversation) {
       user.listConversation = [];
     }
-    user.listConversation.push(conversation.id)
-    userRepository.updateUser(user.id,user)
-  })
+    user.listConversation.push(conversation.id);
+    userRepository.updateUser(user.id, user);
+  });
 
   return {
     conversation,
@@ -158,7 +158,7 @@ export const moveQueueRequestJoinConversation = async (
 
     conversation.requestJoin = [
       ...conversation.requestJoin,
-      { id: newUserId, method: method },
+      { id: newUserId, userInvite: method },
     ];
 
     const listInvite = user.listInvite
@@ -333,6 +333,7 @@ export const leaveGroup = async (
   userId: string
 ): Promise<void> => {
   try {
+    // Validate inputs
     if (!conversationId || typeof conversationId !== "string") {
       throw new Error("conversationId không hợp lệ");
     }
@@ -349,15 +350,15 @@ export const leaveGroup = async (
     }
 
     // Kiểm tra xem người dùng có trong nhóm không
-    if (!conversation.participants.some((p) => p.id === userId)) {
+    if (!conversation.participantsIds.includes(userId)) {
       throw new Error("Bạn không phải là thành viên của nhóm này");
     }
 
     // Xử lý trường hợp người rời là trưởng nhóm
     let updatedConversation: Conversation | null = null;
     if (conversation.leaderId === userId) {
-      const remainingParticipants = (conversation.participants || []).filter(
-        (p) => p.id !== userId
+      const remainingParticipants = conversation.participantsIds.filter(
+        (p) => p !== userId
       );
 
       if (remainingParticipants.length === 0) {
@@ -365,14 +366,35 @@ export const leaveGroup = async (
         await conversationRepository.deleteConversation(conversationId);
         updatedConversation = null;
       } else {
-        // Chuyển quyền trưởng nhóm cho thành viên khác (chọn thành viên đầu tiên)
-        const newLeaderId = remainingParticipants[0].id;
+        // Ưu tiên chuyển quyền trưởng nhóm cho nhóm phó (deputyId) nếu có
+        let newLeaderId: string;
+        if (
+          conversation.deputyId &&
+          remainingParticipants.includes(conversation.deputyId)
+        ) {
+          newLeaderId = conversation.deputyId; // Chuyển quyền cho nhóm phó
+        } else {
+          // Nếu không có nhóm phó, chuyển quyền cho thành viên đầu tiên
+          newLeaderId = remainingParticipants[0];
+        }
+
+        // Xóa người dùng và cập nhật trưởng nhóm
         updatedConversation =
           await conversationRepository.removeUserFromConversation(
             conversationId,
             userId,
             newLeaderId
           );
+
+        // Nếu nhóm phó được chọn làm trưởng nhóm, xóa deputyId
+        if (newLeaderId === conversation.deputyId) {
+          updatedConversation = await conversationRepository.updateConversation(
+            conversationId,
+            {
+              deputyId: undefined,
+            }
+          );
+        }
       }
     } else {
       // Trường hợp thông thường: chỉ xóa người dùng khỏi nhóm
@@ -477,28 +499,68 @@ export const renameGroup = async (
   }
 };
 
-export const searchMesageByConversation = async (
+export const removeUserFromGroup = async (
   conversationId: string,
-  userId: string,
-  keyword: string
-): Promise<{ messages: any[] }> => {
+  currentUserId: string,
+  userIdToRemove: string
+): Promise<void> => {
   try {
-    if (!conversationId || !userId || !keyword) {
+    // Validate inputs
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new Error("conversationId không hợp lệ");
+    }
+    if (!currentUserId || typeof currentUserId !== "string") {
+      throw new Error("currentUserId không hợp lệ");
+    }
+    if (!userIdToRemove || typeof userIdToRemove !== "string") {
+      throw new Error("userIdToRemove không hợp lệ");
+    }
+
+    // Lấy thông tin nhóm hiện tại
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+    if (!conversation) {
+      throw new Error("Không tìm thấy cuộc trò chuyện");
+    }
+
+    // Kiểm tra quyền của người dùng hiện tại
+    if (!conversation.participantsIds.includes(currentUserId)) {
+      throw new Error("Bạn không có quyền truy cập cuộc trò chuyện này");
+    }
+    if (conversation.leaderId !== currentUserId) {
+      throw new Error("Chỉ trưởng nhóm mới có quyền xóa thành viên");
+    }
+
+    // Kiểm tra xem người dùng cần xóa có trong nhóm không
+    if (!conversation.participantsIds.includes(userIdToRemove)) {
+      throw new Error("Người dùng không phải là thành viên của nhóm này");
+    }
+
+    // Không cho phép trưởng nhóm tự xóa chính mình
+    if (userIdToRemove === conversation.leaderId) {
       throw new Error(
-        "Missing required fields: conversationId, userId, or keyword"
+        "Trưởng nhóm không thể tự xóa chính mình. Hãy rời nhóm hoặc giải tán nhóm."
       );
     }
 
-    const result = await conversationRepository.searchMessagesByConversation(
+    // Xóa người dùng khỏi nhóm
+    await conversationRepository.removeUserFromConversation(
       conversationId,
-      userId,
-      keyword
+      userIdToRemove
     );
 
-    return {
-      messages: result.messages,
-    };
+    // Cập nhật listConversation của người dùng bị xóa trong bảng User
+    const user = await userRepository.findById(userIdToRemove);
+    if (user) {
+      const updatedListConversation = (user.listConversation || []).filter(
+        (convId) => convId !== conversationId
+      );
+      await userRepository.updateUser(userIdToRemove, {
+        listConversation: updatedListConversation,
+      });
+    }
   } catch (error: any) {
-    throw new Error(`Failed to search group messages: ${error.message}`);
+    throw new Error(`Không thể xóa thành viên khỏi nhóm: ${error.message}`);
   }
 };
