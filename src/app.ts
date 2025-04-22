@@ -62,16 +62,14 @@ app.use((req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const token = authHeader.split(" ")[1]; // Bearer <token>
-    console.log("👉 JWT Token:", token);
   } else {
-    console.warn("⚠️ No Authorization header found.");
   }
   next();
 });
 app.use('/api/user', authenticateJWT, userRoutes)
 app.use("/api/friends", authenticateJWT, friendRoutes);
 app.use("/api/nickname", authenticateJWT, nicknameRoutes);
-app.use("/api/conversation", authenticateJWT, conversationRoutes);
+app.use("/api/conversations", authenticateJWT, conversationRoutes);
 app.use("/api/message", authenticateJWT, messageRoute);
 app.use("/api/friends", authenticateJWT, friendRoutes);
 // Socket.IO

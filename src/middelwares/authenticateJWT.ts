@@ -48,13 +48,11 @@ export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void
     socket.handshake.headers['auth'];// từ headers string (Postman dễ dùng)
 
   const token = Array.isArray(rawToken) ? rawToken[0] : rawToken;
-  console.log(token)
   if (!token) {
     return next(new Error("No token provided"));
   }
 
   const decodedHeader = jwt.decode(token, { complete: true }) as { header: JwtHeader };
-  console.log("Decoded JWT Header:", decodedHeader.header);
 
   if (!decodedHeader.header.kid) {
     return next(new Error("Token missing 'kid' in header"));
@@ -68,9 +66,7 @@ export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void
       algorithms: ["RS256"],
     },
     (err, decoded) => {
-      console.log(decoded)
       if (err) {
-        console.error("JWT verification failed:", err);
         return next(new Error("Authentication error"));
       }
 

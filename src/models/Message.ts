@@ -9,7 +9,7 @@ export interface Message {
   readed?: string[]; // Danh sách userId đã đọc
   messageType: "group" | "private";
   contentType: "file" | "emoji" | "text";
-  receiverId: string;
+  receiverId?: string | null;
   status: "recalled" | "deleted" | "readed" | "sended" | "received";
   deletedBy?: string[]; // Danh sách userId đã xóa
 }
