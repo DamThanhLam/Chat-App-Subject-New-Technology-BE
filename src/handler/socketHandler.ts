@@ -248,6 +248,12 @@ export function socketHandler(io: Server) {
         socket.emit("error", { error: "Not in group room", code: 403 });
         return;
       }
+
+      const conversation =await conversationService.getConversationById(message.conversationId, user.sub)
+      if(!conversation.permission.chat && conversation.leaderId !== user.sub){
+        console.log("cam chat")
+        return
+      }
       // (Trong private-message, bước này được thay bằng việc tìm socket người nhận)
 
       // 4. Chuẩn bị dữ liệu tin nhắn trước khi lưu (tương tự private-message)
@@ -278,6 +284,7 @@ export function socketHandler(io: Server) {
         // Thay vì gửi đến 1 socket cụ thể, broadcast đến tất cả các socket trong room của nhóm.
         io.to(message.conversationId).emit("group-message", {
           message: savedMessage, // Gửi đối tượng tin nhắn đã lưu (có ID, timestamp thật)
+          conversationId:conversation.id
         });
         // (Trong private-message, bước này là io.to(receiverSocket.socketId).emit(...))
 
@@ -599,7 +606,9 @@ export function socketHandler(io: Server) {
             await messageService.post(message)
 
             io.to(conversationId).emit("userJoinedGroup", {
+              conversationId,
               message: message,
+              userJoin
             });
           } else {
             conversationService.autoJoinToGroup(conversation.id, newUserId, user.sub)
@@ -608,6 +617,7 @@ export function socketHandler(io: Server) {
             messageService.post(message)
 
             io.to(conversationId).emit("userJoinedGroup", {
+              conversationId,
               message: message,
               userJoin: userJoin
             });
@@ -781,7 +791,7 @@ export function socketHandler(io: Server) {
         // Emit sự kiện userJoinedGroup tới tất cả thành viên trong phòng
         io.to(conversationId).emit("userJoinedGroup", {
           conversationId,
-          user: { id: userId, method: username?.username },
+          userJoin: { id: userId, method: username?.username },
         });
       } catch (error: any) {
         socket.emit("error", {
@@ -970,7 +980,8 @@ export function socketHandler(io: Server) {
         io.to(conversationId).emit("reponse-approve-into-group", {
           message: message,
           userJoin: userJoin,
-          decision
+          decision,
+          conversationId
         });
         socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("reponse-approve-into-group", {reject:true})
 
@@ -980,13 +991,23 @@ export function socketHandler(io: Server) {
         conversationService.rejectJoinGroup(conversationId, userId)
         io.to(conversationId).emit("reponse-approve-into-group", {
           message: message,
-          decision
+          decision,
+          conversationId
         });
         socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("reponse-approve-into-group", {accept:true,conversation: conversationService.getConversationById(conversationId,user.sub)})
 
       }
     })
-
+    socket.on("block-chatting",async({conversationId,isChatting})=>{
+      const user = (socket as any).user;
+      const conversation = await conversationService.getConversationById(conversationId, user.sub)
+      if (!conversation.leaderId == user.sub) {
+        socket.emit("error", { code: 400 })
+      }
+      conversation.permission.chat=isChatting
+      conversationService.updateConversation(conversationId,{permission:conversation.permission})
+      io.to(conversationId).emit("block-chatting",{isChatting,conversationId})
+    })
     // socket.on("link-join-group", async (link: string) => {
     //   const user = (socket as any).user;
     //   const conversation = await getConversationByLink(link)

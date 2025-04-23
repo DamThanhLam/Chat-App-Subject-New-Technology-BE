@@ -646,7 +646,7 @@ export const acceptJoinGroup = async (conversationId: string, userId: string) =>
       conversation?.requestJoin?.filter(item => item.id !== itemInvite?.id)
       || [];
     conversation.participantsIds.push(userId)
-    conversationRepository.updateConversation(conversationId, { participants: conversation.participants, requestJoin: conversation.requestJoin, participantsIds: conversation.participantsIds})
+    conversationRepository.updateConversation(conversationId, { participants: conversation.participants, requestJoin: conversation.requestJoin, participantsIds: conversation.participantsIds })
   }
   const user = await userRepository.findById(userId)
   if (user) {
@@ -682,3 +682,10 @@ export const rejectJoinGroup = async (
   const updatedListInvite = (user.listInvite ?? []).filter(item => item.id !== conversationId);
   await userRepository.updateUser(userId, { listInvite: updatedListInvite });
 };
+
+export const updateConversation = async (
+  conversationId: string,
+  updates: Partial<Conversation>
+): Promise<Conversation> => {
+  return await conversationRepository.updateConversation(conversationId, updates)
+}

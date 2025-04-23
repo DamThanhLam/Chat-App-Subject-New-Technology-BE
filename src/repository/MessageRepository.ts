@@ -37,8 +37,8 @@ export class MessageRepository {
       const input: any = {
         TableName: TABLE_NAME,
         ExpressionAttributeValues: {
-          ":userId": { S: userId },
-          ":friendId": { S: friendId },
+          ":userId": userId ,
+          ":friendId":  friendId ,
         },
         FilterExpression:
           "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
@@ -72,7 +72,7 @@ export class MessageRepository {
       const messages = (response.Items ?? [])
         .map((item) => {
           try {
-            const message = unmarshall(item) as Message;
+            const message = item as Message;
             // Kiểm tra xem message có createdAt không và định dạng có hợp lệ không
             if (!message.createdAt) {
               console.warn("Tin nhắn không có createdAt:", message);
