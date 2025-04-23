@@ -8,10 +8,12 @@ export interface Message {
   parentMessage?: Message; // optional để tránh vòng lặp vô hạn
   readed?: string[]; // Danh sách userId đã đọc
   messageType: "group" | "private";
-  contentType: "file" | "emoji" | "text";
+  contentType: "file" | "emoji" | "text"|"notification";
   receiverId?: string | null;
   status: "recalled" | "deleted" | "readed" | "sended" | "received";
   deletedBy?: string[]; // Danh sách userId đã xóa
+  avatarUrl?: string,
+  userName?: string,
 }
 export interface FileMessage {
   data: string | Buffer; // base64 string hoặc buffer

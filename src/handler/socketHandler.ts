@@ -21,6 +21,7 @@ import {
 import { UserService } from "../services/UserService";
 import * as conversationService from "../services/ConversationService";
 import { getConversation } from "../repository/ConversationRepository";
+import { randomUUID } from "crypto";
 
 const users: Record<string, { socketId: string; rooms: any }> = {};
 const conversations: Record<string, string> = {};
@@ -127,6 +128,9 @@ export function socketHandler(io: Server) {
 
         // Đồng thời có thể emit tới các thành viên khác trong nhóm nếu muốn:
         participantIds.forEach((participantId) => {
+
+          if (participantId === user.sub) return
+
           const targetSocket = users[participantId]?.socketId; // bạn cần tự xây hàm này
           console.log(targetSocket);
           console.log("AAAAAA");
@@ -248,11 +252,13 @@ export function socketHandler(io: Server) {
 
       // 4. Chuẩn bị dữ liệu tin nhắn trước khi lưu (tương tự private-message)
       try {
+        const sender = await userService.getUserById(user.sub)
         message.senderId = user.sub; // Gán người gửi là user hiện tại
         message.createdAt = new Date().toISOString(); // Set timestamp server-side
         message.updatedAt = new Date().toISOString();
-        message.status = "sended"; // Đặt trạng thái ban đầu (thường là sended từ phía người gửi)
-        // (Trong private-message, status được set dựa trên trạng thái online của người nhận)
+        message.status = "sended";
+        message.userName = sender ? sender.name : ""
+        message.avatarUrl = sender ? sender.avatarUrl : ""
 
         // 5. Lưu tin nhắn vào Database (tương tự private-message)
         // messageService.post đã được sửa để xử lý cả tin nhắn riêng và nhóm
@@ -481,6 +487,11 @@ export function socketHandler(io: Server) {
         // Gửi lại tin nhắn recall cho chính người gửi
         socket.emit("message-recalled", { message });
 
+        if (message.conversationId) {
+          io.to(message.conversationId).emit("message-recalled", { message });
+          return
+        }
+
         // Gửi cho người nhận (nếu có receiverId và đang online)
         if (message.receiverId) {
           const socketJoin = users[message.receiverId];
@@ -523,8 +534,7 @@ export function socketHandler(io: Server) {
       io.emit("user-list", Object.values(users));
     });
     // Mời tham gia nhóm
-    socket.on(
-      "invite-join-group",
+    socket.on("invite-join-group",
       async (conversationId: string, newUserId: string) => {
         const user = (socket as any).user;
         if (!user) {
@@ -539,6 +549,24 @@ export function socketHandler(io: Server) {
         try {
           // Kiểm tra quyền tham gia nhóm
           const conversation = await getConversation(conversationId);
+          const userJoin = await userService.getUserById(newUserId);
+
+          const userNameCurrent = await userService.getUserName(user.sub);
+
+
+          const message: Message = {
+            contentType: "notification",
+            message: `${userJoin?.name} added the group by ${userNameCurrent?.username}`,
+            senderId: "system",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messageType: "group",
+            status: "sended",
+            conversationId: conversationId,
+            id: randomUUID(),
+            userName: "",
+            avatarUrl: ""
+          }
           if (!conversation) {
             socket.emit("response-invite-join-group", {
               code: 404,
@@ -548,32 +576,49 @@ export function socketHandler(io: Server) {
             return;
           }
 
-          if (
-            conversation.leaderId !== user.sub &&
-            conversation.deputyId !== user.sub
-          ) {
+          if (conversation.participants.find(item => item.id === newUserId)) {
             socket.emit("response-invite-join-group", {
               code: 403,
-              message: "Only the group leader or deputy can invite new members",
+              message: "User joined",
               conversationId,
             });
             return;
           }
+          if (
+            conversation.leaderId !== user.sub &&
+            !(await conversationService.checkPermissionAutoJoin(conversationId))
+          ) {
+            if(conversation.requestJoin.find(item => item.id === newUserId)){
+              socket.emit("error",{message:"this user is waiting approval"})
+              return
+            }
+            await conversationService.moveQueueRequestJoinConversation(conversationId, newUserId, user.sub)
+            message.message = `${userNameCurrent?.username} has invited ${userJoin?.name} and is waiting to be accepted into the group.`
+            const socketIdUserJoin = userJoin && users[userJoin.id]
+            socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("waiting-accepted-into-group", { conversation })
+            await messageService.post(message)
 
-          const username = await userService.getUserName(newUserId);
-          const userNameCurrent = await userService.getUserName(user.sub);
+            io.to(conversationId).emit("userJoinedGroup", {
+              message: message,
+            });
+          } else {
+            conversationService.autoJoinToGroup(conversation.id, newUserId, user.sub)
+            const socketIdUserJoin = userJoin && users[userJoin.id]
+            socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("notification-join-group", { conversation })
+            messageService.post(message)
+
+            io.to(conversationId).emit("userJoinedGroup", {
+              message: message,
+              userJoin: userJoin
+            });
+          }
+
 
           // Emit sự kiện userJoinedGroup để thông báo thời gian thực
-          io.to(conversationId).emit("userJoinedGroup", {
-            conversationId,
-            user: { id: newUserId, method: username?.username },
-          });
 
-          socket.emit("response-invite-join-group", {
-            code: 200,
-            message: `${username?.username} added the group by ${userNameCurrent?.username}`,
-            conversationId,
-          });
+
+
+
         } catch (error: any) {
           socket.emit("response-invite-join-group", {
             code: 500,
@@ -779,7 +824,7 @@ export function socketHandler(io: Server) {
             return;
           }
 
-          if (!conversation.participantsIds.includes(userIdToRemove)) {
+          if (!conversation.participants.find(item => item.id === userIdToRemove)) {
             socket.emit("error", { error: "User not in group", code: 403 });
             return;
           }
@@ -790,9 +835,11 @@ export function socketHandler(io: Server) {
             user.sub,
             userIdToRemove
           );
+          const userRemove = await userService.getUserById(userIdToRemove)
+          const userCurrent = await userService.getUserById(user.sub)
+
 
           const userSocket = users[userIdToRemove];
-          console.log(`User socket for ${userIdToRemove}:`, userSocket); // Debug log
           if (userSocket && userSocket.socketId) {
             const socketToRemove = io.sockets.sockets.get(userSocket.socketId);
             if (socketToRemove) {
@@ -800,7 +847,7 @@ export function socketHandler(io: Server) {
               console.log(`User ${userIdToRemove} left room ${conversationId}`);
               io.to(userSocket.socketId).emit("removed-from-group", {
                 conversationId,
-                message: "Bạn đã bị xóa khỏi nhóm",
+                message: "Bạn đã bị xóa khỏi nhóm " + conversation.groupName,
               });
               console.log(`Emitted removed-from-group to ${userIdToRemove}`);
             } else {
@@ -814,10 +861,25 @@ export function socketHandler(io: Server) {
 
           // Thông báo cho các thành viên còn lại trong nhóm
           const username = await userService.getUserName(userIdToRemove);
+          const message: Message = {
+            contentType: "notification",
+            message: `${userCurrent?.name} removed ${userRemove?.name} fromt the group`,
+            senderId: "system",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messageType: "group",
+            status: "sended",
+            conversationId: conversationId,
+            id: randomUUID(),
+            userName: "",
+            avatarUrl: ""
+          }
+          messageService.post(message)
           io.to(conversationId).emit("userLeft", {
             userId: userIdToRemove,
             username: username?.username || "Unknown",
             conversationId,
+            message
           });
 
           // socket.emit("response-remove-user", {
@@ -833,6 +895,97 @@ export function socketHandler(io: Server) {
         }
       }
     );
+    socket.on("get-approval-status", async (conversationId: string) => {
+      console.log("Received get-approval-status event for conversationId:", conversationId);
+      try {
+        const conversation = await getConversation(conversationId);
+        if (!conversation) {
+          console.log("Conversation not found:", conversationId);
+          socket.emit("error", { error: "Conversation not found", code: 404 });
+          return;
+        }
+        socket.emit("approval-status", {
+          conversationId,
+          isApprovalRequired: conversation.permission.acceptJoin,
+        });
+      } catch (error: any) {
+        console.error("Error fetching approval status:", error.message);
+        socket.emit("error", { error: error.message || "Failed to fetch approval status", code: 500 });
+      }
+    });
+
+    socket.on("toggle-approval", async (data: { conversationId: string; isApprovalRequired: boolean }) => {
+      console.log("Received toggle-approval event for conversationId:", data.conversationId);
+      try {
+        const user = (socket as any).user;
+        if (!user) {
+          console.log("User not authenticated for toggle-approval");
+          socket.emit("error", { error: "User not authenticated", code: 401 });
+          return;
+        }
+
+        console.log("User authenticated:", user.sub);
+
+        const updatedConversation = await conversationService.toggleAcceptJoin(
+          data.conversationId,
+          user.sub
+        );
+
+        console.log("Updated conversation:", updatedConversation);
+
+        io.to(data.conversationId).emit("approval-status-updated", {
+          conversationId: data.conversationId,
+          isApprovalRequired: updatedConversation.permission.acceptJoin,
+        });
+      } catch (error: any) {
+        console.error("Error toggling approval status:", error.message);
+        socket.emit("error", { error: error.message || "Failed to toggle approval status", code: 500 });
+      }
+    });
+    socket.on("approve-into-group", async ({ conversationId, userId, decision }) => {
+      const user = (socket as any).user;
+      const conversation = await conversationService.getConversationById(conversationId, user.sub)
+      if (!conversation.leaderId == userId) {
+        socket.emit("error", { code: 400 })
+      }
+      const userJoin = await userService.getUserById(userId)
+      const socketIdUserJoin = userJoin && users[userJoin.id]
+
+      const message: Message = {
+        contentType: "notification",
+        message: `${userJoin?.name} joined`,
+        senderId: "system",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messageType: "group",
+        status: "sended",
+        conversationId: conversationId,
+        id: randomUUID(),
+        userName: "",
+        avatarUrl: ""
+      }
+      if (decision) {
+        messageService.post(message)
+        conversationService.acceptJoinGroup(conversationId, userId)
+        io.to(conversationId).emit("reponse-approve-into-group", {
+          message: message,
+          userJoin: userJoin,
+          decision
+        });
+        socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("reponse-approve-into-group", {reject:true})
+
+      } else {
+        message.message = `${userJoin?.name} rejected`
+        messageService.post(message)
+        conversationService.rejectJoinGroup(conversationId, userId)
+        io.to(conversationId).emit("reponse-approve-into-group", {
+          message: message,
+          decision
+        });
+        socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("reponse-approve-into-group", {accept:true,conversation: conversationService.getConversationById(conversationId,user.sub)})
+
+      }
+    })
 
     // socket.on("link-join-group", async (link: string) => {
     //   const user = (socket as any).user;

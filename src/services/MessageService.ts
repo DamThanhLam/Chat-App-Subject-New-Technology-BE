@@ -70,8 +70,6 @@ export default class MessageService {
         // Thêm các kiểm tra khác cho filename, size, type nếu cần thiết
         break;
 
-      default:
-        throw new Error("Invalid content type.");
     }
 
     // Gán thời gian nếu chưa có (hoặc luôn gán để đảm bảo server-side timestamp)
@@ -245,12 +243,10 @@ export default class MessageService {
   async getByConversationId(
     conversationId: string,
     userId: string,
-    exclusiveStartKey: string
   ): Promise<Message[] | null> {
     return await messageRepository.getMessagesByConversationId(
       conversationId,
       userId,
-      exclusiveStartKey
     );
   }
 

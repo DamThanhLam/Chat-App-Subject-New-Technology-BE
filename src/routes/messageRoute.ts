@@ -164,7 +164,6 @@ router.get("/group", async (req: Request & { auth?: any }, res: Response) => {
   try {
     const userId = req.auth?.sub;
     const conversationId = req.query.conversationId as string;
-    const exclusiveStartKey = (req.query.exclusiveStartKey as string) || "";
 
     if (!userId) {
       return res
@@ -178,8 +177,7 @@ router.get("/group", async (req: Request & { auth?: any }, res: Response) => {
 
     const messages = await messageService.getByConversationId(
       conversationId,
-      userId,
-      exclusiveStartKey
+      userId
     );
 
     res.json(messages);

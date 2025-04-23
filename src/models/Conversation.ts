@@ -14,6 +14,8 @@ export interface Conversation {
   requestJoin: {
     userInvite: string;
     id: string;
+    username:string;
+    avatarUrl:string;
   }[];
   linkJoin: string;
   permission: {

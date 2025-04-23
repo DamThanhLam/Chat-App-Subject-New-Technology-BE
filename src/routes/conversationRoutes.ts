@@ -3,6 +3,39 @@ import * as conversationService from "../services/ConversationService";
 import { authenticateJWT } from "../middelwares/authenticateJWT";
 
 const router = Router();
+router.get(
+  "/:conversationId/approval-requests",
+  authenticateJWT,
+  async (req: Request & { auth?: any }, res: Response) => {
+    try {
+      const currentUserId = req.auth?.sub;
+      const { conversationId } = req.params;
+
+      if (!currentUserId) {
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: Missing user authentication" });
+      }
+
+      if (!conversationId) {
+        return res
+          .status(400)
+          .json({ error: "conversationId must be provided" });
+      }
+
+      // Gọi service để lấy danh sách yêu cầu tham gia
+      const requests = await conversationService.getApprovalRequests(
+        conversationId,
+        currentUserId
+      );
+
+      res.status(200).json({ requests });
+    } catch (error: any) {
+      console.error("Error fetching approval requests:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 router.post(
   "/create-group",

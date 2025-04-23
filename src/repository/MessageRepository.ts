@@ -349,62 +349,27 @@ export class MessageRepository {
   async getMessagesByConversationId(
     conversationId: string,
     userId: string,
-    exclusiveStartKey?: string
   ): Promise<Message[]> {
     try {
+      console.log("-----------A")
+      console.log(userId)
+      
+      console.log(conversationId)
       const input: any = {
         TableName: TABLE_NAME,
         ExpressionAttributeValues: {
-          ":conversationId": { S: conversationId },
-          ":userId": { S: userId },
+          ":conversationId": conversationId,
+          ":userId":  userId ,
         },
         FilterExpression:
           "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
         ScanIndexForward: false,
       };
 
-      if (exclusiveStartKey) {
-        input.ExclusiveStartKey = {
-          id: { S: exclusiveStartKey },
-        };
-      }
-
       const command = new ScanCommand(input);
       const response = await docClient.send(command);
 
-      console.log("response.Items:", response.Items);
-
-      const messages = (response.Items ?? [])
-        .map((item) => {
-          try {
-            const message = unmarshall(item) as Message;
-            if (!message.createdAt) {
-              console.warn("Tin nhắn không có createdAt:", message);
-              return null;
-            }
-
-            const date = new Date(message.createdAt);
-            if (isNaN(date.getTime())) {
-              console.warn("Tin nhắn có createdAt không hợp lệ:", message);
-              return null;
-            }
-
-            return message;
-          } catch (error: any) {
-            console.error("Lỗi khi giải mã tin nhắn:", item, error.message);
-            return null;
-          }
-        })
-        .filter((message): message is Message => message !== null);
-
-      console.log("messages (filtered):", messages);
-
-      if (messages.length === 0) {
-        console.log("Không có tin nhắn hợp lệ để sắp xếp");
-        return [];
-      }
-
-      const sortedMessages = messages.sort(
+      const sortedMessages = (response.Items as Message[]).sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );

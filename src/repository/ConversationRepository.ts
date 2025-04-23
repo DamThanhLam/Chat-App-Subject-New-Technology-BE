@@ -131,6 +131,34 @@ export const joinedGroup = async (conversationId: string, userId: string) => {
     return true;
   return false;
 };
+export const updatePermission = async (
+  conversationId: string,
+  permissionUpdate: { acceptJoin?: boolean }
+): Promise<Conversation> => {
+  console.log("Updating permission for conversationId:", conversationId);
+  console.log("Permission update payload:", permissionUpdate);
+
+  const now = new Date().toISOString();
+
+  const command = new UpdateCommand({
+    TableName: TABLE_NAME,
+    Key: { id: conversationId },
+    UpdateExpression: "SET #permission.acceptJoin = :acceptJoin, updateAt = :updateAt",
+    ExpressionAttributeNames: {
+      "#permission": "permission",
+    },
+    ExpressionAttributeValues: {
+      ":acceptJoin": permissionUpdate.acceptJoin,
+      ":updateAt": now,
+    },
+    ConditionExpression: "attribute_exists(id)",
+    ReturnValues: "ALL_NEW",
+  });
+
+  const result = await docClient.send(command);
+  console.log("Update result:", result);
+  return result.Attributes as Conversation;
+};
 
 export const getPermission = async (conversationId: string) => {
   const command = new GetCommand({
@@ -168,7 +196,7 @@ export const update = async (conversation: Conversation) => {
 
   // Xử lý các trường cần cập nhật
   Object.entries(fieldsToUpdate).forEach(([key, value]) => {
-    if (value !== undefined) {
+    if (value !== undefined && key !== 'id' && key !=="updatedAt" && key !== "updateAt") {
       const placeholder = `:${key}`;
       const namePlaceholder = `#${key}`;
       setExpressions.push(`${namePlaceholder} = ${placeholder}`);
