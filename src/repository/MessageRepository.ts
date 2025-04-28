@@ -4,9 +4,11 @@ import {
   GetCommand,
   PutCommand,
   UpdateCommand,
+  ScanCommand,
+  DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { dynamoDBClient } from "../config/aws-config";
-import { AttributeValue, ScanCommand } from "@aws-sdk/client-dynamodb";
+import { AttributeValue } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 const client = dynamoDBClient;
 const docClient = DynamoDBDocumentClient.from(client);
@@ -35,8 +37,8 @@ export class MessageRepository {
       const input: any = {
         TableName: TABLE_NAME,
         ExpressionAttributeValues: {
-          ":userId": { S: userId },
-          ":friendId": { S: friendId },
+          ":userId": userId ,
+          ":friendId":  friendId ,
         },
         FilterExpression:
           "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
@@ -70,7 +72,7 @@ export class MessageRepository {
       const messages = (response.Items ?? [])
         .map((item) => {
           try {
-            const message = unmarshall(item) as Message;
+            const message = item as Message;
             // Kiểm tra xem message có createdAt không và định dạng có hợp lệ không
             if (!message.createdAt) {
               console.warn("Tin nhắn không có createdAt:", message);
@@ -102,12 +104,11 @@ export class MessageRepository {
       }
 
       // Sắp xếp theo createdAt giảm dần (mới nhất trước)
-      const sortedMessages = messages
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        // Lấy 20 bản ghi đầu tiên sau khi sort
+      const sortedMessages = messages.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      // Lấy 20 bản ghi đầu tiên sau khi sort
 
       // Log dữ liệu sau khi sắp xếp
       console.log("messages (sorted):", sortedMessages);
@@ -342,6 +343,274 @@ export class MessageRepository {
     } catch (error: any) {
       console.error("Error in getMediaMessages:", error);
       throw new Error(`Failed to get media messages: ${error.message}`);
+    }
+  }
+
+  async getMessagesByConversationId(
+    conversationId: string,
+    userId: string,
+  ): Promise<Message[]> {
+    try {
+      console.log("-----------A")
+      console.log(userId)
+      
+      console.log(conversationId)
+      const input: any = {
+        TableName: TABLE_NAME,
+        ExpressionAttributeValues: {
+          ":conversationId": conversationId,
+          ":userId":  userId ,
+        },
+        FilterExpression:
+          "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
+        ScanIndexForward: false,
+      };
+
+      const command = new ScanCommand(input);
+      const response = await docClient.send(command);
+
+      const sortedMessages = (response.Items as Message[]).sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      console.log("messages (sorted):", sortedMessages);
+
+      return sortedMessages;
+    } catch (error: any) {
+      throw new Error(`Không thể lấy tin nhắn nhóm: ${error.message}`);
+    }
+  }
+
+  async searchMessagesByConversation(
+    conversationId: string,
+    userId: string,
+    keyword: string
+  ): Promise<{ messages: any[]; lastEvaluatedKey?: string }> {
+    try {
+      const normalizedKeyword = keyword.toLowerCase();
+
+      // Truy vấn bảng Message
+      const params = {
+        TableName: "Message",
+        FilterExpression:
+          "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
+        ExpressionAttributeValues: {
+          ":conversationId": conversationId,
+          ":userId": userId,
+        },
+        ScanIndexForward: false,
+      };
+
+      const command = new ScanCommand(params);
+      const response = await docClient.send(command);
+
+      console.log("Raw response.Items:", response.Items);
+
+      if (!response.Items || !Array.isArray(response.Items)) {
+        console.warn("No messages found for userId:", userId);
+        return { messages: [], lastEvaluatedKey: undefined };
+      }
+
+      // Dữ liệu đã được DynamoDBDocumentClient tự động giải mã
+      const messages = response.Items.map((item: any) => {
+        // Kiểm tra các trường cần thiết
+        if (
+          !item.createdAt ||
+          !item.message ||
+          typeof item.message !== "string"
+        ) {
+          console.warn("Invalid message data:", item);
+          return null;
+        }
+        // Kiểm tra trường readed
+        if (!Array.isArray(item.readed)) {
+          console.warn(
+            "Invalid readed field, converting to empty array:",
+            item.readed
+          );
+          item.readed = [];
+        }
+        // Lọc theo từ khóa
+        const normalizedMessage = item.message.toLowerCase();
+        console.log("Normalized message:", normalizedMessage);
+        if (!normalizedMessage.includes(normalizedKeyword)) {
+          return null;
+        }
+        return item as Message;
+      })
+        .filter((message): message is Message => message !== null)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+      console.log("Messages found:", messages);
+
+      return {
+        messages,
+        lastEvaluatedKey: response.LastEvaluatedKey
+          ? JSON.stringify(response.LastEvaluatedKey)
+          : undefined,
+      };
+    } catch (error: any) {
+      console.error("Error in searchMessagesByConversation:", error);
+      throw new Error(`Failed to search group messages: ${error.message}`);
+    }
+  }
+
+  // Lấy danh sách tin nhắn media trong nhóm (chat nhóm)
+  async getMediaMessagesByConversation(
+    conversationId: string,
+    userId: string,
+    exclusiveStartKey?: string
+  ): Promise<{ messages: Message[]; lastEvaluatedKey?: string }> {
+    try {
+      const input: any = {
+        TableName: TABLE_NAME,
+        // ExpressionAttributeNames: {
+        //   // "#status": "status",
+        // },
+        ExpressionAttributeValues: {
+          ":conversationId": conversationId,
+          // ":userId": { S: userId },
+          // ":contentTypeFile": { S: "file" },
+          // ":contentTypeText": { S: "text" },
+          // ":deletedStatus": { S: "deleted" },
+          // ":recalledStatus": { S: "recalled" },
+        },
+        FilterExpression: "conversationId = :conversationId ",
+        // "AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId)) " +
+        // "AND (contentType = :contentTypeFile OR contentType = :contentTypeText) " +
+        // "AND (#status <> :deletedStatus AND #status <> :recalledStatus)",
+        ScanIndexForward: false,
+      };
+
+      if (exclusiveStartKey) {
+        input.ExclusiveStartKey = {
+          id: { S: exclusiveStartKey },
+        };
+      }
+
+      const command = new ScanCommand(input);
+      const response = await docClient.send(command);
+
+      console.log("Raw media response.Items:", response.Items);
+
+      if (!response.Items || !Array.isArray(response.Items)) {
+        console.warn(
+          "No media messages found for conversationId:",
+          conversationId,
+          "and userId:",
+          userId
+        );
+        return { messages: [], lastEvaluatedKey: undefined };
+      }
+
+      const messages = response.Items.map((item) => item as Message);
+
+      return {
+        messages,
+        lastEvaluatedKey: response.LastEvaluatedKey
+          ? JSON.stringify(response.LastEvaluatedKey)
+          : undefined,
+      };
+    } catch (error: any) {
+      console.error("Error in getMediaMessagesByConversation:", error);
+      throw new Error(`Failed to get media messages: ${error.message}`);
+    }
+  }
+
+  async deleteMessagesByConversationId(conversationId: string): Promise<void> {
+    try {
+      const input: any = {
+        TableName: TABLE_NAME,
+        FilterExpression: "conversationId = :conversationId",
+        ExpressionAttributeValues: {
+          ":conversationId": conversationId,
+        },
+      };
+
+      const command = new ScanCommand(input);
+      const response = await docClient.send(command);
+
+      console.log("Messages to delete:", response.Items);
+
+      if (!response.Items || !Array.isArray(response.Items)) {
+        console.log("No messages found for conversationId:", conversationId);
+        return;
+      }
+
+      for (const item of response.Items) {
+        const deleteCommand = new DeleteCommand({
+          TableName: TABLE_NAME,
+          Key: {
+            id: item.id,
+          },
+        });
+        await docClient.send(deleteCommand);
+      }
+
+      console.log("All messages for conversationId deleted:", conversationId);
+    } catch (error: any) {
+      console.error("Error in deleteMessagesByConversationId:", error);
+      throw new Error(`Failed to delete messages: ${error.message}`);
+    }
+  }
+
+  // Phương thức mới: Đánh dấu tin nhắn trong nhóm là đã xóa
+  async markGroupMessagesAsDeleted(
+    userId: string,
+    conversationId: string
+  ): Promise<void> {
+    try {
+      const scanCommand = new ScanCommand({
+        TableName: TABLE_NAME,
+        FilterExpression: "conversationId = :conversationId",
+        ExpressionAttributeValues: {
+          ":conversationId": conversationId,
+        },
+      });
+
+      const scanResult = await docClient.send(scanCommand);
+      const messages = scanResult.Items || [];
+      console.log("Messages in group (raw):", messages);
+
+      const unmarshalledMessages = messages.map((item) => item);
+      console.log("Messages in group (unmarshalled):", unmarshalledMessages);
+
+      for (const message of unmarshalledMessages) {
+        const updateCommand = new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: {
+            id: message.id,
+          },
+          UpdateExpression:
+            "SET deletedBy = list_append(if_not_exists(deletedBy, :empty_list), :userId)",
+          ExpressionAttributeValues: {
+            ":userId": [userId],
+            ":empty_list": [],
+            ":userIdCheck": userId,
+          },
+          ConditionExpression: "NOT contains(deletedBy, :userIdCheck)",
+        });
+
+        try {
+          await docClient.send(updateCommand);
+        } catch (error: any) {
+          if (error.name === "ConditionalCheckFailedException") {
+            console.log(
+              `UserId ${userId} already exists in deletedBy for message ${message.id}`
+            );
+            continue;
+          }
+          throw error;
+        }
+      }
+    } catch (error: any) {
+      throw new Error(
+        `Không thể đánh dấu tin nhắn nhóm là đã xóa: ${error.message}`
+      );
     }
   }
 }

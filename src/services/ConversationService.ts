@@ -2,8 +2,58 @@
 import * as conversationRepository from "../repository/ConversationRepository";
 import { Conversation } from "../models/Conversation";
 import { UserRepository } from "../repository/UserRepository";
-const userRepository = new UserRepository()
-// Tạo nhóm chat từ đoạn chat đôi
+import { log } from "node:console";
+// Removed unused import
+const userRepository = new UserRepository();
+
+export const createGroupConversation = async (
+  leaderId: string,
+  participantIds: string[],
+  groupName: string = "Nhóm mới"
+): Promise<{ conversation: Conversation; message: string }> => {
+  // Validate input
+  if (!leaderId || !participantIds || !Array.isArray(participantIds)) {
+    throw new Error("Thông tin đầu vào không hợp lệ");
+  }
+
+  const conversation = await conversationRepository.createConversation(
+    leaderId,
+    participantIds,
+    groupName
+  );
+  participantIds.map(async (item) => {
+    const user = await userRepository.findById(item);
+    if (!user) return;
+    if (!user.listConversation) {
+      user.listConversation = [];
+    }
+    user.listConversation.push(conversation.id);
+    console.log(user)
+    const u = userRepository.updateUser(user.id, user);
+    console.log(u)
+  });
+  const user = await userRepository.findById(leaderId);
+  if (user) {
+    if (!user.listConversation) {
+      user.listConversation = [];
+    }
+    user.listConversation.push(conversation.id);
+    userRepository.updateUser(user.id, user);
+  }
+  return {
+    conversation,
+    message: "Tạo nhóm thành công",
+  };
+};
+
+export const getConversationsOfUser = async (
+  userId: string
+) => {
+  if (!userId) throw new Error("UserId là bắt buộc");
+  return await conversationRepository.getConversationsByUserId(userId);
+};
+
+//Tạo nhóm chat từ đoạn chat đôi
 // export const createGroupFromChat = async (
 //   currentUserId: string,
 //   friendUserId: string,
@@ -32,29 +82,109 @@ const userRepository = new UserRepository()
 //     throw new Error(`Không thể tạo nhóm: ${error.message}`);
 //   }
 // };
-export const joinedGroup = async (conversationId: string, userId: string): Promise<boolean> => {
-  return conversationRepository.joinedGroup(conversationId, userId)
-}
-export const checkPermissionAutoJoin = async (conversationId: string): Promise<boolean> => {
-  const permission = await conversationRepository.getPermission(conversationId)
-  if (permission) {
-    return permission.acceptJoin
+export const toggleAcceptJoin = async (
+  conversationId: string,
+  currentUserId: string
+): Promise<Conversation> => {
+  console.log("Toggling acceptJoin for conversationId:", conversationId);
+  try {
+    const conversation = await conversationRepository.getConversation(conversationId);
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    if (conversation.leaderId !== currentUserId) {
+      throw new Error("Only the group leader can toggle acceptJoin");
+    }
+
+    const newAcceptJoin = conversation.permission.acceptJoin ? false : true;
+    console.log("New acceptJoin value:", newAcceptJoin);
+
+    const updatedConversation = await conversationRepository.updatePermission(
+      conversationId,
+      { acceptJoin: newAcceptJoin }
+    );
+
+    console.log("Updated conversation in DB:", updatedConversation);
+    return updatedConversation;
+  } catch (error: any) {
+    console.error("Error in toggleAcceptJoin:", error.message);
+    throw new Error(`Failed to toggle acceptJoin: ${error.message}`);
   }
-  return false
-}
+};
+
+export const getApprovalStatus = async (conversationId: string): Promise<boolean> => {
+  try {
+    // Lấy thông tin nhóm từ repository
+    const conversation = await conversationRepository.getConversation(conversationId);
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    // Trả về trạng thái phê duyệt
+    return conversation.permission.acceptJoin;
+  } catch (error: any) {
+    throw new Error(`Failed to fetch approval status: ${error.message}`);
+  }
+};
+
+export const getApprovalRequests = async (
+  conversationId: string,
+  currentUserId: string
+) => {
+  try {
+    // Lấy thông tin nhóm từ repository
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    // Kiểm tra quyền: chỉ trưởng nhóm hoặc phó nhóm mới được xem danh sách yêu cầu
+    if (
+      conversation.leaderId !== currentUserId &&
+      conversation.deputyId !== currentUserId
+    ) {
+      throw new Error("You do not have permission to view approval requests");
+    }
+
+    // Lấy danh sách yêu cầu tham gia
+    const requests = conversation.requestJoin || [];
+
+    return requests;
+  } catch (error: any) {
+    console.error("Error in getApprovalRequests:", error.message);
+    throw new Error(`Failed to fetch approval requests: ${error.message}`);
+  }
+};
+
+export const joinedGroup = async (
+  conversationId: string,
+  userId: string
+): Promise<boolean> => {
+  return conversationRepository.joinedGroup(conversationId, userId);
+};
+export const checkPermissionAutoJoin = async (
+  conversationId: string
+): Promise<boolean> => {
+  const permission = await conversationRepository.getPermission(conversationId);
+  if (permission) {
+    return permission.acceptJoin;
+  }
+  return false;
+};
 
 // Thêm người dùng vào nhóm chat
 export const autoJoinToGroup = async (
   conversationId: string,
   newUserId: string,
-  method: string
+  userInvite: string
 ) => {
   try {
-    if (
-      !conversationId ||
-      !newUserId ||
-      !method
-    ) {
+    if (!conversationId || !newUserId || !userInvite) {
       throw new Error("Thiếu hoặc dữ liệu không hợp lệ");
     }
 
@@ -64,21 +194,24 @@ export const autoJoinToGroup = async (
       throw new Error("Không tìm thấy cuộc trò chuyện");
     }
 
-    const user = await userRepository.findById(newUserId)
+    const user = await userRepository.findById(newUserId);
 
     if (!user) {
       throw new Error("Không tìm thấy người dùng");
     }
 
-    const listConversation = user.listConversation ? [...user.listConversation, conversation.id] : [conversation.id]
+    user.listConversation = user.listConversation
+      ? [...user.listConversation, conversation.id]
+      : [conversation.id];
 
-    conversation.participants = [...conversation.participants, { id: newUserId, method: method }]
+    conversation.participants = [
+      ...conversation.participants,
+      { id: newUserId, method: userInvite },
+    ];
+    conversation.participantsIds.push(newUserId)
+    // await userRepository.updateUser(user.id, user);
 
-    await userRepository.updateUser(user.id, { listConversation: listConversation })
-
-    await conversationRepository.update(
-      conversation
-    );
+    await conversationRepository.update(conversation);
 
     return { message: "Thêm người dùng vào nhóm thành công" };
   } catch (error: any) {
@@ -92,11 +225,7 @@ export const moveQueueRequestJoinConversation = async (
   method: string
 ) => {
   try {
-    if (
-      !conversationId ||
-      !newUserId ||
-      !method
-    ) {
+    if (!conversationId || !newUserId || !method) {
       throw new Error("Thiếu hoặc dữ liệu không hợp lệ");
     }
 
@@ -106,21 +235,23 @@ export const moveQueueRequestJoinConversation = async (
       throw new Error("Không tìm thấy cuộc trò chuyện");
     }
 
-
-    const user = await userRepository.findById(newUserId)
+    const user = await userRepository.findById(newUserId);
 
     if (!user) {
       throw new Error("Không tìm thấy người dùng");
     }
 
-    conversation.requestJoin = [...conversation.requestJoin, { id: newUserId, method: method }]
+    conversation.requestJoin = [
+      ...conversation.requestJoin,
+      { id: newUserId, userInvite: method, username: user.name, avatarUrl: user.avatarUrl },
+    ];
 
-    const listInvite = user.listInvite ? [...user.listInvite, { id: newUserId, method: method }] : [{ id: newUserId, method: method }]
-    await userRepository.updateUser(user.id, { listInvite: listInvite })
+    const listInvite = user.listInvite
+      ? [...user.listInvite, { id: conversation.id, method: method }]
+      : [{ id: conversation.id, method: method }];
+    // await userRepository.updateUser(user.id, { listInvite: listInvite });
 
-    await conversationRepository.update(
-      conversation
-    );
+    await conversationRepository.update(conversation);
 
     return { message: "đợi chấp nhận vào nhóm thành công" };
   } catch (error: any) {
@@ -129,8 +260,8 @@ export const moveQueueRequestJoinConversation = async (
 };
 
 export const getConversationByLink = async (link: string) => {
-  return await conversationRepository.getConversationByLink(link)
-}
+  return await conversationRepository.getConversationByLink(link);
+};
 // Tìm các nhóm chung giữa hai người dùng
 export const findCommonGroups = async (
   userId: string,
@@ -166,39 +297,395 @@ export const findCommonGroups = async (
   }
 };
 export const leaveRoom = async (userId: string, roomId: string) => {
+  const user = await userRepository.findById(userId);
+  const listConversation = user?.listConversation?.filter(
+    (item) => item != roomId
+  );
+  await userRepository.updateUser(userId, {
+    listConversation: listConversation,
+  });
+};
+export const getConversationById = async (
+  conversationId: string,
+  currentUserId: string
+): Promise<Conversation> => {
+  try {
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new Error("conversationId không hợp lệ");
+    }
+
+    if (!currentUserId || typeof currentUserId !== "string") {
+      throw new Error("currentUserId không hợp lệ");
+    }
+
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+    if (!conversation) {
+      throw new Error("Không tìm thấy cuộc trò chuyện");
+    }
+
+    if (
+      !conversation.participants.some(
+        (participant) => participant.id === currentUserId
+      )
+    ) {
+      throw new Error("Bạn không có quyền truy cập cuộc trò chuyện này");
+    }
+
+    return conversation;
+  } catch (error: any) {
+    throw new Error(
+      `Không thể lấy thông tin cuộc trò chuyện: ${error.message}`
+    );
+  }
+};
+export const addUsersToGroup = async (
+  conversationId: string,
+  currentUserId: string,
+  newUserIds: string[]
+): Promise<Conversation> => {
+  try {
+    // Kiểm tra dữ liệu đầu vào
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new Error("conversationId không hợp lệ");
+    }
+    if (!currentUserId || typeof currentUserId !== "string") {
+      throw new Error("currentUserId không hợp lệ");
+    }
+    if (!Array.isArray(newUserIds) || newUserIds.length === 0) {
+      throw new Error("newUserIds phải là mảng không rỗng");
+    }
+    if (!newUserIds.every((id) => typeof id === "string")) {
+      throw new Error("Tất cả newUserIds phải là chuỗi");
+    }
+
+    // Lấy thông tin nhóm hiện tại
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+    if (!conversation) {
+      throw new Error("Không tìm thấy cuộc trò chuyện");
+    }
+
+    // Kiểm tra quyền của người dùng hiện tại
+    if (!conversation.participants.some((p) => p.id === currentUserId)) {
+      throw new Error("Bạn không có quyền truy cập cuộc trò chuyện này");
+    }
+    if (conversation.leaderId !== currentUserId) {
+      throw new Error("Chỉ trưởng nhóm mới có quyền thêm thành viên");
+    }
+
+    // Kiểm tra các thành viên mới
+    const existingUsers = await Promise.all(
+      newUserIds.map(async (userId) => {
+        const user = await userRepository.findById(userId);
+        if (!user) {
+          throw new Error(`Không tìm thấy người dùng với ID: ${userId}`);
+        }
+        return user;
+      })
+    );
+
+    // Cập nhật nhóm trong bảng Conversation
+    const updatedConversation =
+      await conversationRepository.addUsersToConversation(
+        conversationId,
+        newUserIds
+      );
+
+    // Cập nhật listConversation của các thành viên mới trong bảng User
+    await Promise.all(
+      existingUsers.map(async (user) => {
+        const listConversation = user.listConversation
+          ? [...user.listConversation, conversationId]
+          : [conversationId];
+        await userRepository.updateUser(user.id, {
+          listConversation,
+        });
+      })
+    );
+
+    return updatedConversation;
+  } catch (error: any) {
+    throw new Error(`Không thể thêm thành viên vào nhóm: ${error.message}`);
+  }
+};
+
+// Người dùng rời khỏi nhóm
+export const leaveGroup = async (
+  conversationId: string,
+  userId: string
+): Promise<void> => {
+  try {
+    // Validate inputs
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new Error("conversationId không hợp lệ");
+    }
+    if (!userId || typeof userId !== "string") {
+      throw new Error("userId không hợp lệ");
+    }
+
+    // Lấy thông tin nhóm hiện tại
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+    if (!conversation) {
+      throw new Error("Không tìm thấy cuộc trò chuyện");
+    }
+
+    // Kiểm tra xem người dùng có trong nhóm không
+    if (!conversation.participantsIds.includes(userId)) {
+      throw new Error("Bạn không phải là thành viên của nhóm này");
+    }
+
+    // Xử lý trường hợp người rời là trưởng nhóm
+    let updatedConversation: Conversation | null = null;
+    if (conversation.leaderId === userId) {
+      const remainingParticipants = conversation.participantsIds.filter(
+        (p) => p !== userId
+      );
+
+      if (remainingParticipants.length === 0) {
+        // Nếu không còn thành viên nào, xóa nhóm
+        await conversationRepository.deleteConversation(conversationId);
+        updatedConversation = null;
+      } else {
+        // Ưu tiên chuyển quyền trưởng nhóm cho nhóm phó (deputyId) nếu có
+        let newLeaderId: string;
+        if (
+          conversation.deputyId &&
+          remainingParticipants.includes(conversation.deputyId)
+        ) {
+          newLeaderId = conversation.deputyId; // Chuyển quyền cho nhóm phó
+        } else {
+          // Nếu không có nhóm phó, chuyển quyền cho thành viên đầu tiên
+          newLeaderId = remainingParticipants[0];
+        }
+
+        // Xóa người dùng và cập nhật trưởng nhóm
+        updatedConversation =
+          await conversationRepository.removeUserFromConversation(
+            conversationId,
+            userId,
+            newLeaderId
+          );
+
+        // Nếu nhóm phó được chọn làm trưởng nhóm, xóa deputyId
+        if (newLeaderId === conversation.deputyId) {
+          updatedConversation = await conversationRepository.updateConversation(
+            conversationId,
+            {
+              deputyId: undefined,
+            }
+          );
+        }
+      }
+    } else {
+      // Trường hợp thông thường: chỉ xóa người dùng khỏi nhóm
+      updatedConversation =
+        await conversationRepository.removeUserFromConversation(
+          conversationId,
+          userId
+        );
+    }
+
+    // Cập nhật listConversation của người dùng trong bảng User
+    const user = await userRepository.findById(userId);
+    if (user) {
+      const updatedListConversation = (user.listConversation || []).filter(
+        (convId) => convId !== conversationId
+      );
+      await userRepository.updateUser(userId, {
+        listConversation: updatedListConversation,
+      });
+    }
+
+    if (!updatedConversation) {
+      return;
+    }
+  } catch (error: any) {
+    throw new Error(`Không thể rời nhóm: ${error.message}`);
+  }
+};
+
+// Xóa nhóm chat (chỉ trưởng nhóm mới có quyền)
+export const deleteGroup = async (
+  conversationId: string,
+  currentUserId: string
+): Promise<void> => {
+  try {
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new Error("conversationId không hợp lệ");
+    }
+    if (!currentUserId || typeof currentUserId !== "string") {
+      throw new Error("currentUserId không hợp lệ");
+    }
+
+    // Lấy thông tin nhóm hiện tại
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+    if (!conversation) {
+      throw new Error("Không tìm thấy cuộc trò chuyện");
+    }
+
+    // Kiểm tra quyền của người dùng hiện tại
+    if (!conversation.participants.some((p) => p.id === currentUserId)) {
+      throw new Error("Bạn không có quyền truy cập cuộc trò chuyện này");
+    }
+    if (conversation.leaderId !== currentUserId) {
+      throw new Error("Chỉ trưởng nhóm mới có quyền xóa nhóm");
+    }
+
+    // Cập nhật listConversation của tất cả thành viên trong nhóm
+    const participantIds = conversation.participantsIds || [];
+    await Promise.all(
+      participantIds.map(async (userId) => {
+        const user = await userRepository.findById(userId);
+        if (user) {
+          const updatedListConversation = (user.listConversation || []).filter(
+            (convId) => convId !== conversationId
+          );
+          await userRepository.updateUser(userId, {
+            listConversation: updatedListConversation,
+          });
+          console.log("updatedListConversation", updatedListConversation);
+        }
+      })
+    );
+
+    // Xóa nhóm
+    await conversationRepository.deleteConversation(conversationId);
+  } catch (error: any) {
+    throw new Error(`Không thể xóa nhóm: ${error.message}`);
+  }
+};
+
+export const renameGroup = async (
+  conversationId: string,
+  newName: string
+): Promise<void> => {
+  try {
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    conversation.groupName = newName;
+
+    await conversationRepository.updateGroupName(conversation);
+  } catch (error: any) {
+    console.error("Error updating group name:", error);
+    throw error; // Hoặc xử lý lỗi tùy theo yêu cầu
+  }
+};
+
+export const removeUserFromGroup = async (
+  conversationId: string,
+  currentUserId: string,
+  userIdToRemove: string
+): Promise<void> => {
+  try {
+    // Validate inputs
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new Error("conversationId không hợp lệ");
+    }
+    if (!currentUserId || typeof currentUserId !== "string") {
+      throw new Error("currentUserId không hợp lệ");
+    }
+    if (!userIdToRemove || typeof userIdToRemove !== "string") {
+      throw new Error("userIdToRemove không hợp lệ");
+    }
+
+    // Lấy thông tin nhóm hiện tại
+    const conversation = await conversationRepository.getConversation(
+      conversationId
+    );
+    if (!conversation) {
+      throw new Error("Không tìm thấy cuộc trò chuyện");
+    }
+
+    // Không cho phép trưởng nhóm tự xóa chính mình
+    if (userIdToRemove === conversation.leaderId) {
+      throw new Error(
+        "Trưởng nhóm không thể tự xóa chính mình. Hãy rời nhóm hoặc giải tán nhóm."
+      );
+    }
+
+    // Xóa người dùng khỏi nhóm
+    await conversationRepository.removeUserFromConversation(
+      conversationId,
+      userIdToRemove
+    );
+
+    // Cập nhật listConversation của người dùng bị xóa trong bảng User
+    const user = await userRepository.findById(userIdToRemove);
+    if (user) {
+      const updatedListConversation = (user.listConversation || []).filter(
+        (convId) => convId !== conversationId
+      );
+      await userRepository.updateUser(userIdToRemove, {
+        listConversation: updatedListConversation,
+      });
+    }
+  } catch (error: any) {
+    throw new Error(`Không thể xóa thành viên khỏi nhóm: ${error.message}`);
+  }
+};
+
+export const acceptJoinGroup = async (conversationId: string, userId: string) => {
+  const conversation = await conversationRepository.getConversation(conversationId)
+  if (conversation) {
+    const itemInvite = conversation?.requestJoin.find(item => item.id === userId)
+    itemInvite && conversation?.participants.push({ method: itemInvite.userInvite, id: itemInvite.id })
+    conversation.requestJoin =
+      conversation?.requestJoin?.filter(item => item.id !== itemInvite?.id)
+      || [];
+    conversation.participantsIds.push(userId)
+    conversationRepository.updateConversation(conversationId, { participants: conversation.participants, requestJoin: conversation.requestJoin, participantsIds: conversation.participantsIds })
+  }
   const user = await userRepository.findById(userId)
-  const listConversation = user?.listConversation?.filter(item => item != roomId)
-  await userRepository.updateUser(userId, { listConversation: listConversation })
+  if (user) {
+    const listInvite = user?.listInvite?.filter(item => item.id != conversationId)
+    userRepository.updateUser(userId, { listInvite: listInvite })
+  }
 
 }
-// export const getConversationById = async (
-//   conversationId: string,
-//   currentUserId: string
-// ): Promise<Conversation> => {
-//   try {
-//     if (!conversationId || typeof conversationId !== "string") {
-//       throw new Error("conversationId không hợp lệ");
-//     }
 
-//     if (!currentUserId || typeof currentUserId !== "string") {
-//       throw new Error("currentUserId không hợp lệ");
-//     }
+export const rejectJoinGroup = async (
+  conversationId: string,
+  userId: string
+): Promise<void> => {
+  // 1. Lấy conversation
+  const conversation = await conversationRepository.getConversation(conversationId);
+  if (!conversation) {
+    throw new Error(`Conversation ${conversationId} not found`);
+  }
 
-//     const conversation = await conversationRepository.getConversation(
-//       conversationId
-//     );
-//     if (!conversation) {
-//       throw new Error("Không tìm thấy cuộc trò chuyện");
-//     }
+  // 2. Loại requestJoin của user
+  const updatedRequestJoin = conversation.requestJoin.filter(item => item.id !== userId);
 
-//     if (!conversation.participants.includes(currentUserId)) {
-//       throw new Error("Bạn không có quyền truy cập cuộc trò chuyện này");
-//     }
+  // 3. Lưu conversation (không thêm participants)
+  await conversationRepository.updateConversation(conversationId, {
+    requestJoin: updatedRequestJoin
+  });
 
-//     return conversation;
-//   } catch (error: any) {
-//     throw new Error(
-//       `Không thể lấy thông tin cuộc trò chuyện: ${error.message}`
-//     );
-//   }
-// };
+  // 4. Cập nhật user.listInvite
+  const user = await userRepository.findById(userId);
+  if (!user) {
+    throw new Error(`User ${userId} not found`);
+  }
+  const updatedListInvite = (user.listInvite ?? []).filter(item => item.id !== conversationId);
+  await userRepository.updateUser(userId, { listInvite: updatedListInvite });
+};
+
+export const updateConversation = async (
+  conversationId: string,
+  updates: Partial<Conversation>
+): Promise<Conversation> => {
+  return await conversationRepository.updateConversation(conversationId, updates)
+}

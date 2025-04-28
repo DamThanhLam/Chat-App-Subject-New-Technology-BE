@@ -30,7 +30,7 @@ router.post("/register", async (req, res) => {
     status: "offline", 
     createdAt: new Date(),
     updatedAt: new Date(),
-    urlAVT: "", 
+    avatarUrl: "", 
   };
   const account: Account = { email, password: decryptedPass, salt: "" };
 

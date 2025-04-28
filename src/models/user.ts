@@ -6,11 +6,10 @@ export interface User {
   status: "online" | "offline";
   createdAt: Date;
   updatedAt: Date;
-  urlAVT: string;
+  avatarUrl: string;
   listInvite?:{
     method: string,
     id: string
   }[],
   listConversation?: string[]
-
 }
