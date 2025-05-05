@@ -206,6 +206,11 @@ export const declineFriendRequestById = async (id: string) => {
   const friend = original.Item as Friend;
   if (!friend) return null;  // Trả về null nếu không tìm thấy friend
 
+  // Kiểm tra trạng thái, nếu đã ACCEPTED thì không cho phép hủy
+  if (friend.status === FriendStatus.ACCEPTED) {
+    throw new Error("Cannot decline a friend request that has already been accepted.");
+  }
+
   // Xóa bản gốc
   await dynamoDb.delete({
     TableName: TABLE_NAME,
