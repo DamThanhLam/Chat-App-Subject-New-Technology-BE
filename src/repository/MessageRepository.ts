@@ -37,8 +37,8 @@ export class MessageRepository {
       const input: any = {
         TableName: TABLE_NAME,
         ExpressionAttributeValues: {
-          ":userId": userId ,
-          ":friendId":  friendId ,
+          ":userId": userId,
+          ":friendId": friendId,
         },
         FilterExpression:
           "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
@@ -122,8 +122,8 @@ export class MessageRepository {
     const input: any = {
       TableName: "Message",
       ExpressionAttributeValues: {
-        ":userId": { S: userId },
-        ":friendId": { S: friendId },
+        ":userId": userId,
+        ":friendId": friendId,
       },
       FilterExpression:
         "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND not contains(deletedBy, :userId)",
@@ -133,7 +133,7 @@ export class MessageRepository {
     console.log(response.Items);
     // 👇 Giải mã và sắp xếp theo createdAt giảm dần (mới nhất trước)
     const messages = (response.Items ?? [])
-      .map((item) => unmarshall(item) as Message)
+      .map((item) => item as Message)
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -164,8 +164,8 @@ export class MessageRepository {
         FilterExpression:
           "(senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)",
         ExpressionAttributeValues: {
-          ":userId": { S: userId },
-          ":friendId": { S: friendId },
+          ":userId": userId,
+          ":friendId": friendId,
         },
       });
 
@@ -173,7 +173,7 @@ export class MessageRepository {
       const messages = scanResult.Items || [];
       console.log("messages (raw):", messages);
 
-      const unmarshalledMessages = messages.map((item) => unmarshall(item));
+      const unmarshalledMessages = messages.map((item) => item);
       console.log("messages (unmarshalled):", unmarshalledMessages);
 
       for (const message of unmarshalledMessages) {
@@ -223,8 +223,8 @@ export class MessageRepository {
       const params: any = {
         TableName: TABLE_NAME,
         ExpressionAttributeValues: {
-          ":userId": { S: userId },
-          ":friendId": { S: friendId },
+          ":userId": userId,
+          ":friendId": friendId,
         },
         FilterExpression:
           "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
@@ -248,7 +248,7 @@ export class MessageRepository {
       }
 
       // Chuẩn hóa tin nhắn và lọc theo từ khóa
-      const messages = response.Items.map((item) => unmarshall(item) as Message)
+      const messages = response.Items.map((item) => item as Message)
         .filter((message) => {
           // Kiểm tra message có tồn tại và là string không
           if (!message || typeof message.message !== "string") {
@@ -294,12 +294,12 @@ export class MessageRepository {
           "#status": "status", // Thay thế từ khóa dự trữ 'status'
         },
         ExpressionAttributeValues: {
-          ":userId": { S: userId },
-          ":friendId": { S: friendId },
-          ":contentTypeFile": { S: "file" },
-          ":contentTypeText": { S: "text" },
-          ":deletedStatus": { S: "deleted" },
-          ":recalledStatus": { S: "recalled" },
+          ":userId": userId,
+          ":friendId": friendId,
+          ":contentTypeFile": "file",
+          ":contentTypeText": "text",
+          ":deletedStatus": "deleted",
+          ":recalledStatus": "recalled",
         },
         FilterExpression:
           "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) " +
@@ -330,9 +330,7 @@ export class MessageRepository {
         return { messages: [], lastEvaluatedKey: undefined };
       }
 
-      const messages = response.Items.map(
-        (item) => unmarshall(item) as Message
-      );
+      const messages = response.Items.map((item) => item as Message);
 
       return {
         messages,
@@ -348,18 +346,18 @@ export class MessageRepository {
 
   async getMessagesByConversationId(
     conversationId: string,
-    userId: string,
+    userId: string
   ): Promise<Message[]> {
     try {
-      console.log("-----------A")
-      console.log(userId)
-      
-      console.log(conversationId)
+      console.log("-----------A");
+      console.log(userId);
+
+      console.log(conversationId);
       const input: any = {
         TableName: TABLE_NAME,
         ExpressionAttributeValues: {
           ":conversationId": conversationId,
-          ":userId":  userId ,
+          ":userId": userId,
         },
         FilterExpression:
           "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
