@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import upload_file from "../middelwares/upload_file"
 import S3Service from "../aws_service/s3.service";
 import { getFriendList, getFriendListAccept, getPendingFriendRequests } from "../services/FriendService";
+import multer from "multer";
 interface AuthRequest extends Request {
   auth?: { sub?: string };
 }
@@ -103,6 +104,7 @@ router.get("/:id", async (req, res) => {
   try {
     const user = await userService.getUserById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
+    console.log(user)
     res.json(user);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -112,18 +114,22 @@ router.get("/:id", async (req, res) => {
  * POST /api/user/:id/avatar
  * Upload avatar
  */
-router.post("/avatar", upload_file.single("image"), async (req: Request & { auth?: any }, res: Response) => {
+router.post("/avatar", (req, res, next) => {
+  upload_file.single("image")(req, res, (err: any) => {
+    if (err instanceof multer.MulterError || err instanceof Error) {
+      return res.status(400).json( err.message);
+    }
+    next(); // không có lỗi → tiếp tục controller
+  });
+}, async (req: Request & { auth?: any }, res: Response) => {
   const file = req.file;
 
   if (!file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-  // Ví dụ tạo URL giả định từ server local
-  const avatar = await S3Service.post(file);
-
   try {
-    // const updatedUser = await userService.updateUserInfo(id, { avatarUrl });
+    const avatar = await S3Service.post(file);
     res.json({
       message: "Avatar updated successfully",
       avatar: avatar,

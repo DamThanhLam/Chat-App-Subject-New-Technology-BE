@@ -18,8 +18,8 @@ const S3Service = {
 
     try {
       const command = new PutObjectCommand({
-        Bucket: "lam-dev-iuh",
-        Key: "app-chat/"+filePath,
+        Bucket: "app-chat-new-technology",
+        Key: filePath,
         Body: file.buffer,
       });
 
