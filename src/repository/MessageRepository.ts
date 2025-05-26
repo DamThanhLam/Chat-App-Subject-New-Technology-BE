@@ -16,6 +16,7 @@ const docClient = DynamoDBDocumentClient.from(client);
 const TABLE_NAME = "Message";
 import { paginateScan } from "../utils/pagination";
 import { randomUUID } from "crypto";
+import { log } from "util";
 export class MessageRepository {
   async post(message: Message) {
     message.id = randomUUID();
@@ -222,20 +223,21 @@ export class MessageRepository {
       // Lấy tất cả tin nhắn giữa userId và friendId
       const params: any = {
         TableName: TABLE_NAME,
+        ExpressionAttributeNames: {
+          "#status": "status",
+        },
         ExpressionAttributeValues: {
           ":userId": userId,
           ":friendId": friendId,
+          ":recalledStatus": "recalled",
         },
         FilterExpression:
-          "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
+          "((senderId = :userId AND receiverId = :friendId) OR (senderId = :friendId AND receiverId = :userId)) AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId)) AND (#status <> :recalledStatus OR attribute_not_exists(#status))",
         ScanIndexForward: false,
       };
 
       const command = new ScanCommand(params);
       const response = await docClient.send(command);
-
-      // Log dữ liệu thô từ DynamoDB
-      console.log("Raw response.Items:", response.Items);
 
       if (!response.Items || !Array.isArray(response.Items)) {
         console.warn(
@@ -256,9 +258,14 @@ export class MessageRepository {
             return false;
           }
 
+          // Bỏ qua tin nhắn đã recalled
+          if (message.status === "recalled") {
+            console.log("Skipping recalled message:", message.id);
+            return false;
+          }
+
           // Chuẩn hóa nội dung tin nhắn (chuyển thành chữ thường)
           const normalizedMessage = message.message.toLowerCase();
-          console.log("Normalized message:", normalizedMessage);
 
           return normalizedMessage.includes(normalizedKeyword);
         })
@@ -266,8 +273,6 @@ export class MessageRepository {
           (a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-
-      console.log("Messages found:", messages);
 
       return {
         messages,
@@ -391,12 +396,16 @@ export class MessageRepository {
       // Truy vấn bảng Message
       const params = {
         TableName: "Message",
-        FilterExpression:
-          "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId))",
+        ExpressionAttributeNames: {
+          "#status": "status",
+        },
         ExpressionAttributeValues: {
           ":conversationId": conversationId,
           ":userId": userId,
+          ":recalledStatus": "recalled",
         },
+        FilterExpression:
+          "conversationId = :conversationId AND (attribute_not_exists(deletedBy) OR not contains(deletedBy, :userId)) AND (#status <> :recalledStatus OR attribute_not_exists(#status))",
         ScanIndexForward: false,
       };
 
@@ -428,6 +437,16 @@ export class MessageRepository {
             item.readed
           );
           item.readed = [];
+        }
+        console.log("=========== STATUS CHECK ===========");
+        console.log("STATUS VALUE:", item.status);
+        console.log("MESSAGE ID:", item.id);
+        console.log("===================================");
+
+        // Kiểm tra message có bị recalled không
+        if (item && typeof item === "object" && item.status === "recalled") {
+          console.log("FOUND RECALLED MESSAGE - SKIPPING:", item.id);
+          return null;
         }
         // Lọc theo từ khóa
         const normalizedMessage = item.message.toLowerCase();
