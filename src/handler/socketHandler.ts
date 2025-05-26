@@ -368,6 +368,34 @@ export function socketHandler(io: Server) {
         });
       }
     });
+  
+    socket.on("cancel-friend-request", async (data) => {
+      const { senderId, receiverId } = data;
+      console.log("Nhận yêu cầu hủy lời mời với senderId:", senderId, "và receiverId:", receiverId);
+
+      if (!senderId || !receiverId) {
+        socket.emit("cancel-friend-request-response", {
+          code: 400,
+          error: "Thiếu senderId hoặc receiverId",
+        });
+        return;
+      }
+
+      try {
+        await FriendService.cancelFriendRequestListFriend(senderId, receiverId);
+
+        socket.emit("cancel-friend-request-response", {
+          code: 200,
+          message: "Friend request cancelled",
+        });
+      } catch (error: any) {
+        console.error("Lỗi khi hủy lời mời:", error);
+        socket.emit("cancel-friend-request-response", {
+          code: 500,
+          error: error.message || "Failed to cancel friend request",
+        });
+      }
+    });
 
     socket.on("acceptFriendRequest", async (data) => {
       const { friendRequestId } = data;
