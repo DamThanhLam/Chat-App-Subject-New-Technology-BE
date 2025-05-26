@@ -368,7 +368,7 @@ export function socketHandler(io: Server) {
         });
       }
     });
-  
+
     socket.on("cancel-friend-request", async (data) => {
       const { senderId, receiverId } = data;
       console.log("Nhận yêu cầu hủy lời mời với senderId:", senderId, "và receiverId:", receiverId);
@@ -586,12 +586,12 @@ export function socketHandler(io: Server) {
           const conversation = await getConversation(conversationId);
           const userJoin = await userService.getUserById(newUserId);
 
-          const userNameCurrent = await userService.getUserName(user.sub);
+          const userNameCurrent = await userService.getUserById(user.sub);
 
 
           const message: Message = {
             contentType: "notification",
-            message: `${userJoin?.name} added the group by ${userNameCurrent?.username}`,
+            message: `${userJoin?.name} added the group by ${userNameCurrent?.name}`,
             senderId: "system",
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -628,7 +628,7 @@ export function socketHandler(io: Server) {
               return
             }
             await conversationService.moveQueueRequestJoinConversation(conversationId, newUserId, user.sub)
-            message.message = `${userNameCurrent?.username} has invited ${userJoin?.name} and is waiting to be accepted into the group.`
+            message.message = `${userNameCurrent?.name} has invited ${userJoin?.name} and is waiting to be accepted into the group.`
             const socketIdUserJoin = userJoin && users[userJoin.id]
             socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("waiting-accepted-into-group", { conversation })
             await messageService.post(message)
@@ -742,11 +742,26 @@ export function socketHandler(io: Server) {
         }
         console.log(`User ${userId} left group ${conversationId}`);
         const username = await userService.getUserName(userId);
+        const message: Message = {
+          contentType: "notification",
+          message: `${username?.name} was leaved`,
+          senderId: "system",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messageType: "group",
+          status: "sended",
+          conversationId: conversationId,
+          id: randomUUID(),
+          userName: "",
+          avatarUrl: ""
+        }
+        messageService.post(message)
         // Emit sự kiện userLeft tới các thành viên còn lại trong nhóm
         io.to(conversationId).emit("userLeft", {
           userId,
           username: username?.username,
           conversationId,
+          message
         });
       } catch (error: any) {
         socket.emit("error", {
