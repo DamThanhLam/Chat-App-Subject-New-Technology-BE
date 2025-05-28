@@ -242,6 +242,28 @@ export const declineFriendRequestById = async (id: string) => {
   return friend;
 };
 
+//Delete Friend 28-5-2025
+export const deleteFriendByPair = async (senderId: string, receiverId: string): Promise<void> => {
+  // Quét bản ghi có cặp senderId/receiverId khớp.
+  const result = await dynamoDb.scan({
+    TableName: TABLE_NAME,
+    FilterExpression: '(senderId = :sender AND receiverId = :receiver) OR (senderId = :receiver AND receiverId = :sender)',
+    ExpressionAttributeValues: {
+      ':sender': senderId,
+      ':receiver': receiverId,
+    },
+  }).promise();
+
+  if (result.Items && result.Items.length > 0) {
+    // Xóa tất cả các bản ghi tìm thấy
+    for (const item of result.Items) {
+      await dynamoDb.delete({
+        TableName: TABLE_NAME,
+        Key: { id: item.id },
+      }).promise();
+    }
+  }
+};
 
 export const cancelFriendRequestA = async (senderId: string, receiverId: string) => {
   const result = await dynamoDb.query({

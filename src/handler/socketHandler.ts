@@ -369,6 +369,34 @@ export function socketHandler(io: Server) {
       }
     });
 
+    socket.on("cancel-friend-request", async (data) => {
+      const { senderId, receiverId } = data;
+      console.log("Nhận yêu cầu hủy lời mời với senderId:", senderId, "và receiverId:", receiverId);
+
+      if (!senderId || !receiverId) {
+        socket.emit("cancel-friend-request-response", {
+          code: 400,
+          error: "Thiếu senderId hoặc receiverId",
+        });
+        return;
+      }
+
+      try {
+        await FriendService.cancelFriendRequestListFriend(senderId, receiverId);
+
+        socket.emit("cancel-friend-request-response", {
+          code: 200,
+          message: "Friend request cancelled",
+        });
+      } catch (error: any) {
+        console.error("Lỗi khi hủy lời mời:", error);
+        socket.emit("cancel-friend-request-response", {
+          code: 500,
+          error: error.message || "Failed to cancel friend request",
+        });
+      }
+    });
+
     socket.on("acceptFriendRequest", async (data) => {
       const { friendRequestId } = data;
       const token = socket.handshake.auth.token;
@@ -558,12 +586,12 @@ export function socketHandler(io: Server) {
           const conversation = await getConversation(conversationId);
           const userJoin = await userService.getUserById(newUserId);
 
-          const userNameCurrent = await userService.getUserName(user.sub);
+          const userNameCurrent = await userService.getUserById(user.sub);
 
 
           const message: Message = {
             contentType: "notification",
-            message: `${userJoin?.name} added the group by ${userNameCurrent?.username}`,
+            message: `${userJoin?.name} added the group by ${userNameCurrent?.name}`,
             senderId: "system",
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -600,7 +628,7 @@ export function socketHandler(io: Server) {
               return
             }
             await conversationService.moveQueueRequestJoinConversation(conversationId, newUserId, user.sub)
-            message.message = `${userNameCurrent?.username} has invited ${userJoin?.name} and is waiting to be accepted into the group.`
+            message.message = `${userNameCurrent?.name} has invited ${userJoin?.name} and is waiting to be accepted into the group.`
             const socketIdUserJoin = userJoin && users[userJoin.id]
             socketIdUserJoin && io.to(socketIdUserJoin.socketId).emit("waiting-accepted-into-group", { conversation })
             await messageService.post(message)
@@ -714,11 +742,26 @@ export function socketHandler(io: Server) {
         }
         console.log(`User ${userId} left group ${conversationId}`);
         const username = await userService.getUserName(userId);
+        const message: Message = {
+          contentType: "notification",
+          message: `${username?.name} was leaved`,
+          senderId: "system",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messageType: "group",
+          status: "sended",
+          conversationId: conversationId,
+          id: randomUUID(),
+          userName: "",
+          avatarUrl: ""
+        }
+        messageService.post(message)
         // Emit sự kiện userLeft tới các thành viên còn lại trong nhóm
         io.to(conversationId).emit("userLeft", {
           userId,
           username: username?.username,
           conversationId,
+          message
         });
       } catch (error: any) {
         socket.emit("error", {
@@ -1008,6 +1051,63 @@ export function socketHandler(io: Server) {
       conversationService.updateConversation(conversationId, { permission: conversation.permission })
       io.to(conversationId).emit("block-chatting", { isChatting, conversationId })
     })
+
+
+    //Socket Read Message and Delete Friend 28-5-2025
+    socket.on("read-message", async (messageId: string) => {
+      const user = (socket as any).user;
+      try {
+        // Lấy tin nhắn theo messageId
+        const message = await messageService.getById(messageId);
+        if (!message) return;
+
+        // Chỉ thực hiện cập nhật nếu người đọc không phải là người gửi
+        if (message.senderId !== user.sub) {
+          // Nếu field readed chưa tồn tại, khởi tạo là mảng rỗng
+          if (!message.readed) {
+            message.readed = [];
+          }
+          // Thêm userId vào mảng readed nếu chưa có
+          if (!message.readed.includes(user.sub)) {
+            message.readed.push(user.sub);
+          }
+          // Nếu có ít nhất 1 người đọc, bạn có thể cập nhật status thành "readed"
+          message.status = "readed";
+          // Lưu cập nhật tin nhắn vào DB
+          await messageService.update(message);
+
+          // Gửi thông báo cập nhật trạng thái tới người gửi (nếu đang online)
+          const senderSocket = users[message.senderId];
+          if (senderSocket) {
+            io.to(senderSocket.socketId).emit("message-read", { message });
+          }
+        }
+      } catch (error: any) {
+        console.error("Error updating read message:", error.message);
+      }
+    });
+
+    //28-5-2025
+    socket.on("delete-friend", async (data: { userId: string; friendId: string }) => {
+      try {
+        console.log("Nhận yêu cầu xóa bạn:", data);
+
+        // Gọi service để xóa bạn khỏi database
+        await FriendService.deleteFriend(data.userId, data.friendId);
+
+        console.log(`Đã xóa bạn: ${data.userId} <-> ${data.friendId}`);
+        
+        // Không cần gửi lại sự kiện cho hai bên
+      } catch (error: any) {
+        console.error("Lỗi khi xóa bạn:", error.message);
+        socket.emit("error", { error: error.message, code: 500 });
+      }
+    });
+
+
+
+
+    
     // socket.on("link-join-group", async (link: string) => {
     //   const user = (socket as any).user;
     //   const conversation = await getConversationByLink(link)

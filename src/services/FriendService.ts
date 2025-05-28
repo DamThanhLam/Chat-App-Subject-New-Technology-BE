@@ -1,5 +1,5 @@
 import { FriendStatus } from '../models/Friend';
-import { addFriendToAcceptedList, cancelFriendRequestA, createFriend, declineFriendRequestById, getAcceptedFriendsByUserId, getFriendsByUserId, getPendingFriendRequestsByUserId, isAlreadyFriends, isPendingFriendRequest, updateFriendStatus } from '../repository/FriendRepository';
+import { addFriendToAcceptedList, cancelFriendRequestA, createFriend, declineFriendRequestById, deleteFriendByPair, getAcceptedFriendsByUserId, getFriendsByUserId, getPendingFriendRequestsByUserId, isAlreadyFriends, isPendingFriendRequest, updateFriendStatus } from '../repository/FriendRepository';
 
 export const getFriendList = async (userId: string) => {
   const friends = await getAcceptedFriendsByUserId(userId);
@@ -50,4 +50,15 @@ export const checkPendingRequest = async (senderId: string, receiverId: string):
 export const getFriendListAccept = async (userId: string) => {
   const friends = await getAcceptedFriendsByUserId(userId);
   return friends || [];
+};
+
+//Delete Friend 28-5-2025
+export const deleteFriend = async (userId: string, friendId: string): Promise<void> => {
+  // Bạn có thể kiểm tra thêm nếu cần: đảm bảo userId không trùng friendId, v.v.
+  if (userId === friendId) {
+    throw new Error("Cannot delete friend with yourself.");
+  }
+  // Gọi repository để xóa dựa vào cặp senderId và receiverId.
+  await deleteFriendByPair(userId, friendId);
+  
 };
