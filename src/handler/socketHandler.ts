@@ -1051,6 +1051,63 @@ export function socketHandler(io: Server) {
       conversationService.updateConversation(conversationId, { permission: conversation.permission })
       io.to(conversationId).emit("block-chatting", { isChatting, conversationId })
     })
+
+
+    //Socket Read Message and Delete Friend 28-5-2025
+    socket.on("read-message", async (messageId: string) => {
+      const user = (socket as any).user;
+      try {
+        // Lấy tin nhắn theo messageId
+        const message = await messageService.getById(messageId);
+        if (!message) return;
+
+        // Chỉ thực hiện cập nhật nếu người đọc không phải là người gửi
+        if (message.senderId !== user.sub) {
+          // Nếu field readed chưa tồn tại, khởi tạo là mảng rỗng
+          if (!message.readed) {
+            message.readed = [];
+          }
+          // Thêm userId vào mảng readed nếu chưa có
+          if (!message.readed.includes(user.sub)) {
+            message.readed.push(user.sub);
+          }
+          // Nếu có ít nhất 1 người đọc, bạn có thể cập nhật status thành "readed"
+          message.status = "readed";
+          // Lưu cập nhật tin nhắn vào DB
+          await messageService.update(message);
+
+          // Gửi thông báo cập nhật trạng thái tới người gửi (nếu đang online)
+          const senderSocket = users[message.senderId];
+          if (senderSocket) {
+            io.to(senderSocket.socketId).emit("message-read", { message });
+          }
+        }
+      } catch (error: any) {
+        console.error("Error updating read message:", error.message);
+      }
+    });
+
+    //28-5-2025
+    socket.on("delete-friend", async (data: { userId: string; friendId: string }) => {
+      try {
+        console.log("Nhận yêu cầu xóa bạn:", data);
+
+        // Gọi service để xóa bạn khỏi database
+        await FriendService.deleteFriend(data.userId, data.friendId);
+
+        console.log(`Đã xóa bạn: ${data.userId} <-> ${data.friendId}`);
+        
+        // Không cần gửi lại sự kiện cho hai bên
+      } catch (error: any) {
+        console.error("Lỗi khi xóa bạn:", error.message);
+        socket.emit("error", { error: error.message, code: 500 });
+      }
+    });
+
+
+
+
+    
     // socket.on("link-join-group", async (link: string) => {
     //   const user = (socket as any).user;
     //   const conversation = await getConversationByLink(link)
