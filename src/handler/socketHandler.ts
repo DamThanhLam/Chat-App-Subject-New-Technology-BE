@@ -1091,21 +1091,35 @@ export function socketHandler(io: Server) {
     socket.on("delete-friend", async (data: { userId: string; friendId: string }) => {
       try {
         console.log("Nhận yêu cầu xóa bạn:", data);
-
         // Gọi service để xóa bạn khỏi database
         await FriendService.deleteFriend(data.userId, data.friendId);
-
         console.log(`Đã xóa bạn: ${data.userId} <-> ${data.friendId}`);
         
-        // Không cần gửi lại sự kiện cho hai bên
+        // Gửi sự kiện 'friend-deleted' tới cả 2 bên
+        // Giả sử bạn đang quản lý các socket đang kết nối trong biến "users"
+        const senderSocket = users[data.userId];
+        const receiverSocket = users[data.friendId];
+        
+        // Phát sự kiện cho người gửi
+        if (senderSocket) {
+          io.to(senderSocket.socketId).emit("friend-deleted", {
+            deletedBy: data.userId,
+            deletedUser: data.friendId,
+          });
+        }
+        
+        // Phát sự kiện cho người bị xóa
+        if (receiverSocket) {
+          io.to(receiverSocket.socketId).emit("friend-deleted", {
+            deletedBy: data.userId,
+            deletedUser: data.friendId,
+          });
+        }
       } catch (error: any) {
         console.error("Lỗi khi xóa bạn:", error.message);
         socket.emit("error", { error: error.message, code: 500 });
       }
     });
-
-
-
 
     
     // socket.on("link-join-group", async (link: string) => {
